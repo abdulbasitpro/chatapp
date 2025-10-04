@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, MessageSquare, Plus, Users, Menu, Loader2, Trash2, CircleDot } from "lucide-react";
+import { LogOut, MessageSquare, Plus, Users, Menu, Loader2, Trash2 } from "lucide-react";
 import * as React from "react";
 
 import {
@@ -135,7 +135,7 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
     );
   }
   
-  const isChatPage = pathname.startsWith('/chat/rooms') || pathname === '/chat';
+  const isChatPage = pathname.startsWith('/chat');
 
   return (
     <SidebarProvider>
@@ -150,24 +150,6 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
               </div>
             </SidebarHeader>
             <SidebarContent>
-              <SidebarGroup>
-                <div className="flex flex-col gap-1 p-2">
-                   <Link href="/chat" passHref>
-                      <SidebarMenuButton variant="ghost" isActive={isChatPage} className="w-full justify-start text-sm">
-                          <MessageSquare />
-                          <span>Chat</span>
-                      </SidebarMenuButton>
-                   </Link>
-                   <Link href="/status" passHref>
-                     <SidebarMenuButton variant="ghost" isActive={pathname.startsWith('/status')} className="w-full justify-start text-sm">
-                         <CircleDot />
-                         <span>Status</span>
-                     </SidebarMenuButton>
-                   </Link>
-                </div>
-              </SidebarGroup>
-              
-              {isChatPage && (
                 <>
                   <Separator className="my-2" />
                   <SidebarGroup>
@@ -211,7 +193,6 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
                     )}
                   </SidebarMenu>
                 </>
-              )}
             </SidebarContent>
             <SidebarFooter>
               <Separator className="my-2" />
