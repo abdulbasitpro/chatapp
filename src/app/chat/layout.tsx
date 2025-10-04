@@ -96,14 +96,15 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
       const roomRef = doc(firestore, 'rooms', deleteRoom.id);
       const messagesRef = collection(roomRef, 'messages');
       
+      // Use a write batch to delete all messages and the room in one atomic operation
       const messagesSnapshot = await getDocs(messagesRef);
       const batch = writeBatch(firestore);
       messagesSnapshot.forEach(doc => {
         batch.delete(doc.ref);
       });
-      await batch.commit();
+      batch.delete(roomRef); // Add room deletion to the same batch
 
-      deleteDocumentNonBlocking(roomRef);
+      await batch.commit();
 
       toast({ title: "Room deleted", description: `Room "${deleteRoom.name}" and all its messages have been deleted.` });
 
@@ -113,7 +114,7 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
 
     } catch (error) {
       console.error("Error deleting room:", error);
-      toast({ variant: "destructive", title: "Error", description: "Failed to delete room." });
+      toast({ variant: "destructive", title: "Error", description: "Failed to delete room. You may not have permission." });
     } finally {
       setIsDeleting(false);
       setDeleteRoom(null);

@@ -76,7 +76,7 @@ export default function ChatRoomPage() {
   }, [messages, isLoadingMessages]);
   
   useEffect(() => {
-    if (!isLoadingRoom && !room && !roomError) {
+    if (!isLoadingRoom && !room && roomError) {
       toast({
         variant: "destructive",
         title: "Error loading room",
@@ -179,13 +179,17 @@ export default function ChatRoomPage() {
 
     setIsDeleting(true);
 
-    const messageRef = doc(roomRef, 'messages', messageToDelete.id);
-    deleteDocumentNonBlocking(messageRef);
-
-    toast({ title: "Message deleted" });
-    
-    setIsDeleting(false);
-    setMessageToDelete(null);
+    try {
+      const messageRef = doc(firestore, 'rooms', roomId, 'messages', messageToDelete.id);
+      await deleteDocumentNonBlocking(messageRef);
+      toast({ title: "Message deleted" });
+    } catch (error) {
+      console.error("Error deleting message:", error);
+      toast({ variant: "destructive", title: "Error", description: "Failed to delete message." });
+    } finally {
+      setIsDeleting(false);
+      setMessageToDelete(null);
+    }
   };
 
   const formatTimestamp = (timestamp: any) => {
@@ -194,7 +198,7 @@ export default function ChatRoomPage() {
     return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
   
-  if (isLoadingRoom || (!room && !roomError)) {
+  if (isLoadingRoom && !room) {
     return <ChatSkeleton />;
   }
 
