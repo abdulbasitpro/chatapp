@@ -21,9 +21,9 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
-import { useAuth, useUser, useCollection, useFirestore, useMemoFirebase } from "@/firebase";
+import { useAuth, useUser, useCollection, useFirestore, useMemoFirebase, useDoc } from "@/firebase";
 import { signOut } from "firebase/auth";
-import { collection, query, orderBy, where } from "firebase/firestore";
+import { collection, query, orderBy, where, doc } from "firebase/firestore";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useForm } from "react-hook-form";
@@ -53,14 +53,11 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
 
   const { data: rooms, isLoading: isLoadingRooms } = useCollection<{ name: string }>(roomsQuery);
 
-  const { data: currentUserData, isLoading: isLoadingCurrentUserData } = useCollection<{ name: string, avatarUrl: string }>(
-    useMemoFirebase(() => {
-      if (!firestore || !user) return null;
-      return query(collection(firestore, 'users'), where('id', '==', user.uid));
-    }, [firestore, user])
-  );
-  
-  const currentUser = currentUserData?.[0];
+  const userRef = useMemoFirebase(() => {
+    if(!firestore || !user) return null;
+    return doc(firestore, 'users', user.uid);
+  }, [firestore, user]);
+  const {data: currentUser, isLoading: isLoadingCurrentUserData} = useDoc<{name: string, avatarUrl: string}>(userRef);
 
   const handleLogout = async () => {
     await signOut(auth);

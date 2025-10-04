@@ -1,11 +1,10 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { ArrowRight, MessageSquare } from 'lucide-react';
+import { ArrowRight, MessageSquare, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -68,7 +67,7 @@ export default function LoginPage() {
     return (
         <main className="flex min-h-screen flex-col items-center justify-center p-4 bg-background">
             <div className="text-center">
-                <MessageSquare className="mx-auto h-16 w-16 animate-pulse text-primary" />
+                <Loader2 className="mx-auto h-16 w-16 animate-spin text-primary" />
                 <p className="mt-4 text-muted-foreground">Loading...</p>
             </div>
         </main>
