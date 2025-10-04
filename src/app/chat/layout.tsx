@@ -15,8 +15,8 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarInset,
-  SidebarGroup,
   SidebarTrigger,
+  SidebarGroup,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -93,20 +93,20 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
               </div>
             </SidebarFooter>
           </Sidebar>
-          <SidebarInset>
-              <header className="p-4 border-b flex items-center justify-between md:hidden">
-                  <div className="flex items-center gap-2">
-                    <MessageSquare className="w-6 h-6 text-primary" />
-                    <h2 className="font-headline text-xl font-semibold">Chatify</h2>
-                  </div>
-                  <SidebarTrigger>
-                    <Menu />
-                  </SidebarTrigger>
-              </header>
-              <div className="flex-1 overflow-y-auto">
-                {children}
-              </div>
-          </SidebarInset>
+          <div className="flex flex-col flex-1 w-full h-full">
+            <header className="p-4 border-b flex items-center justify-between md:hidden">
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="w-6 h-6 text-primary" />
+                  <h2 className="font-headline text-xl font-semibold">Chatify</h2>
+                </div>
+                <SidebarTrigger>
+                  <Menu />
+                </SidebarTrigger>
+            </header>
+            <main className="flex-1 overflow-y-auto">
+              {children}
+            </main>
+          </div>
         </div>
       </div>
     </SidebarProvider>
