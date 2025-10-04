@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -37,6 +38,7 @@ export default function SignupPage() {
   });
 
   const handleSignup = async (values: z.infer<typeof signupSchema>) => {
+    if (!auth || !firestore) return;
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
       const user = userCredential.user;
@@ -60,9 +62,6 @@ export default function SignupPage() {
         title: "Signup Successful",
         description: "Welcome to Chatify!",
       });
-
-      // Manually reload the user object to get the updated displayName
-      await user.reload();
       
       router.push('/chat');
 
