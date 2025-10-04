@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Send, Smile, Paperclip, Loader2, Trash2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -97,7 +97,7 @@ export default function ChatRoomPage() {
   }, [messages, isLoadingMessages, typingUsers]);
 
   useEffect(() => {
-    if (!isLoadingRoom && !room && roomError) {
+    if (!isLoadingRoom && !room && !roomError) {
       router.replace('/chat');
     }
   }, [isLoadingRoom, room, roomError, router]);
@@ -247,11 +247,11 @@ export default function ChatRoomPage() {
     return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
   
-  if (isLoadingRoom || !room) {
+  if (isLoadingRoom) {
     return <ChatSkeleton />;
   }
 
-  if (roomError) {
+  if (roomError || !room) {
     return <div className="flex h-full items-center justify-center text-destructive">Error loading room. It may not exist or you may not have permission to view it.</div>;
   }
 
@@ -400,3 +400,5 @@ const ChatSkeleton = () => (
     </footer>
   </div>
 );
+
+    
