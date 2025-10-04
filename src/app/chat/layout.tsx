@@ -135,17 +135,16 @@ function ChatSidebar() {
           ) : (
             rooms?.map((room) => (
               <SidebarMenuItem key={room.id}>
-                <Link href={`/chat/rooms/${room.id}`} passHref legacyBehavior>
-                  <a onClick={() => setOpenMobile(false)} className="flex-1">
-                    <SidebarMenuButton
-                      isActive={pathname === `/chat/rooms/${room.id}`}
-                      tooltip={{ children: room.name, side: 'right' }}
-                      className="justify-start"
-                    >
-                      <Users className="text-muted-foreground" />
-                      <span>{room.name}</span>
-                    </SidebarMenuButton>
-                  </a>
+                <Link href={`/chat/rooms/${room.id}`} className="flex-1">
+                  <SidebarMenuButton
+                    isActive={pathname === `/chat/rooms/${room.id}`}
+                    tooltip={{ children: room.name, side: 'right' }}
+                    className="justify-start"
+                    onClick={() => setOpenMobile(false)}
+                  >
+                    <Users className="text-muted-foreground" />
+                    <span>{room.name}</span>
+                  </SidebarMenuButton>
                 </Link>
                 {user?.uid === room.creatorId && (
                    <SidebarMenuAction
