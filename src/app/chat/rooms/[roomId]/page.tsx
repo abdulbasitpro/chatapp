@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useCollection, useDoc, useFirestore, useUser, useMemoFirebase, addDocumentNonBlocking, deleteDocumentNonBlocking, useStorage } from '@/firebase';
 import { collection, doc, query, orderBy, serverTimestamp, limit } from 'firebase/firestore';
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle as AlertDialogTitleComponent } from "@/components/ui/alert-dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
@@ -304,8 +304,8 @@ export default function ChatRoomPage() {
       </footer>
       <AlertDialog open={!!messageToDelete} onOpenChange={(open) => !open && setMessageToDelete(null)}>
         <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitleComponent>Are you absolutely sure?</AlertDialogTitleComponent>
+           <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
               This will permanently delete this message. This action cannot be undone.
             </AlertDialogDescription>
@@ -335,7 +335,5 @@ const ChatSkeleton = () => (
     </footer>
   </div>
 );
-
-    
 
     

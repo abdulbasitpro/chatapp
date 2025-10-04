@@ -13,11 +13,11 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarMenuItem,
-  SidebarMenuAction,
   useSidebar,
   SidebarTrigger,
   SidebarMenu,
   SidebarMenuSkeleton,
+  SidebarMenuAction,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -41,171 +41,12 @@ const createRoomSchema = z.object({
   name: z.string().min(1, "Room name is required"),
 });
 
-
-function ChatSidebar() {
-  const pathname = usePathname();
-  const { setOpenMobile } = useSidebar();
-  const { user } = useUser();
-  const firestore = useFirestore();
-  const { toast } = useToast();
-  const router = useRouter();
-
-  const [isCreateRoomOpen, setCreateRoomOpen] = React.useState(false);
-  const [deleteRoom, setDeleteRoom] = React.useState<WithId<Room> | null>(null);
-  const [isDeleting, setIsDeleting] = React.useState(false);
-
-  type RoomWithId = Room & { id: string };
-
-  const roomsQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
-    return query(collection(firestore, "rooms"), orderBy("name"));
-  }, [firestore]);
-
-  const { data: rooms, isLoading: isLoadingRooms } = useCollection<RoomWithId>(roomsQuery);
-
-  const form = useForm<z.infer<typeof createRoomSchema>>({
-    resolver: zodResolver(createRoomSchema),
-    defaultValues: {
-      name: "",
-    },
-  });
-
-  const handleCreateRoom = (values: z.infer<typeof createRoomSchema>) => {
-    if (!user || !firestore) return;
-    const roomsCollection = collection(firestore, "rooms");
-    addDocumentNonBlocking(roomsCollection, {
-      name: values.name,
-      creatorId: user.uid,
-    });
-    toast({ title: "Room created!" });
-    setCreateRoomOpen(false);
-    form.reset();
-  };
-
-  const handleDeleteRoom = async () => {
-    if (!firestore || !deleteRoom) return;
-    setIsDeleting(true);
-
-    try {
-      const roomRef = doc(firestore, 'rooms', deleteRoom.id);
-      const messagesRef = collection(roomRef, 'messages');
-      
-      const messagesSnapshot = await getDocs(messagesRef);
-      const batch = writeBatch(firestore);
-      messagesSnapshot.forEach(doc => {
-        batch.delete(doc.ref);
-      });
-      batch.delete(roomRef);
-
-      await batch.commit();
-
-      toast({ title: "Room deleted", description: `Room "${deleteRoom.name}" and all its messages have been deleted.` });
-
-      if (pathname.includes(deleteRoom.id)) {
-        router.push('/chat');
-      }
-    } catch (error) {
-      console.error("Error deleting room:", error);
-      toast({ variant: "destructive", title: "Error deleting room", description: "Could not delete the room and its messages."});
-    }
-    
-    setIsDeleting(false);
-    setDeleteRoom(null);
-  };
-
-  return (
-    <>
-      <SidebarContent>
-        <div className="p-2">
-          <Button variant="default" className="w-full" onClick={() => setCreateRoomOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            New Chat Room
-          </Button>
-        </div>
-        <Separator className="my-1" />
-        <SidebarMenu>
-          {isLoadingRooms ? (
-            <>
-              <SidebarMenuSkeleton showIcon />
-              <SidebarMenuSkeleton showIcon />
-              <SidebarMenuSkeleton showIcon />
-            </>
-          ) : (
-            rooms?.map((room) => (
-              <SidebarMenuItem key={room.id}>
-                <Link
-                  href={`/chat/rooms/${room.id}`}
-                  onClick={() => setOpenMobile(false)}
-                  className={cn(
-                    "flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-none ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50",
-                    "h-8 text-sm",
-                    pathname === `/chat/rooms/${room.id}` ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground" : ""
-                  )}
-                >
-                  <Users className="text-muted-foreground" />
-                  <span>{room.name}</span>
-                </Link>
-                {user?.uid === room.creatorId && (
-                   <SidebarMenuAction
-                      onClick={() => setDeleteRoom(room)}
-                      aria-label="Delete room"
-                      showOnHover
-                   >
-                     <Trash2 />
-                   </SidebarMenuAction>
-                )}
-              </SidebarMenuItem>
-            ))
-          )}
-        </SidebarMenu>
-      </SidebarContent>
-      <Dialog open={isCreateRoomOpen} onOpenChange={setCreateRoomOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create a new room</DialogTitle>
-            <DialogDescription>Enter a name for your new chat room.</DialogDescription>
-          </DialogHeader>
-          <form onSubmit={form.handleSubmit(handleCreateRoom)} className="space-y-4">
-            <Input {...form.register("name")} placeholder="e.g., Cool Project" className="text-foreground" />
-            {form.formState.errors.name && <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>}
-            <DialogFooter>
-              <Button type="button" variant="ghost" onClick={() => setCreateRoomOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? "Creating..." : "Create"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-      <AlertDialog open={!!deleteRoom} onOpenChange={(open) => !open && setDeleteRoom(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete the room "{deleteRoom?.name}" and all of its messages. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setDeleteRoom(null)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteRoom} disabled={isDeleting} className="bg-destructive hover:bg-destructive/90">
-              {isDeleting ? "Deleting..." : "Delete"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
-  );
-}
-
-
 export default function ChatLayout({ children }: { children: React.ReactNode }) {
+  const { user, isUserLoading } = useUser();
   const router = useRouter();
   const auth = useAuth();
-  const { user, isUserLoading } = useUser();
-  const { toast } = useToast();
-
+  
   const handleLogout = async () => {
-    if(!auth) return;
     await signOut(auth);
     router.push('/');
   };
@@ -284,3 +125,159 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
 
 // Helper type for useCollection
 type WithId<T> = T & { id: string };
+
+function ChatSidebar() {
+  const pathname = usePathname();
+  const { setOpenMobile } = useSidebar();
+  const { user } = useUser();
+  const firestore = useFirestore();
+  const { toast } = useToast();
+  const router = useRouter();
+
+  const [isCreateRoomOpen, setCreateRoomOpen] = React.useState(false);
+  const [deleteRoom, setDeleteRoom] = React.useState<WithId<Room> | null>(null);
+  const [isDeleting, setIsDeleting] = React.useState(false);
+
+  type RoomWithId = Room & { id: string };
+
+  const roomsQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return query(collection(firestore, "rooms"), orderBy("name"));
+  }, [firestore]);
+
+  const { data: rooms, isLoading: isLoadingRooms } = useCollection<RoomWithId>(roomsQuery);
+
+  const form = useForm<z.infer<typeof createRoomSchema>>({
+    resolver: zodResolver(createRoomSchema),
+    defaultValues: {
+      name: "",
+    },
+  });
+
+  const handleCreateRoom = (values: z.infer<typeof createRoomSchema>) => {
+    if (!user || !firestore) return;
+    const roomsCollection = collection(firestore, "rooms");
+    addDocumentNonBlocking(roomsCollection, {
+      name: values.name,
+      creatorId: user.uid,
+    });
+    toast({ title: "Room created!" });
+    setCreateRoomOpen(false);
+    form.reset();
+  };
+
+  const handleDeleteRoom = async () => {
+    if (!firestore || !deleteRoom) return;
+    setIsDeleting(true);
+
+    try {
+      const roomRef = doc(firestore, 'rooms', deleteRoom.id);
+      const messagesRef = collection(roomRef, 'messages');
+      
+      const messagesSnapshot = await getDocs(messagesRef);
+      const batch = writeBatch(firestore);
+      messagesSnapshot.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      batch.delete(roomRef);
+
+      await batch.commit();
+
+      toast({ title: "Room deleted", description: `Room "${deleteRoom.name}" and all its messages have been deleted.` });
+
+      if (pathname.includes(deleteRoom.id)) {
+        router.push('/chat');
+      }
+    } catch (error) {
+      console.error("Error deleting room:", error);
+      toast({ variant: "destructive", title: "Error", description: "Failed to delete room. You may not have permission." });
+    } finally {
+      setIsDeleting(false);
+      setDeleteRoom(null);
+    }
+  };
+
+  return (
+    <>
+      <SidebarContent>
+        <div className="flex flex-col gap-2 p-2">
+          <Button variant="outline" onClick={() => setCreateRoomOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create new room
+          </Button>
+        </div>
+        <Separator className="my-1" />
+        <SidebarMenu>
+          {isLoadingRooms ? (
+            <>
+              <SidebarMenuSkeleton showIcon />
+              <SidebarMenuSkeleton showIcon />
+              <SidebarMenuSkeleton showIcon />
+            </>
+          ) : (
+            rooms?.map((room) => (
+              <SidebarMenuItem key={room.id}>
+                 <Link href={`/chat/rooms/${room.id}`} passHref legacyBehavior>
+                  <a
+                    onClick={() => setOpenMobile(false)}
+                    className={cn(
+                      "flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-none ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground h-8",
+                      pathname.includes(room.id) && "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+                    )}
+                  >
+                    <Users className="h-4 w-4" />
+                    <span className="truncate">{room.name}</span>
+                  </a>
+                </Link>
+                {user?.uid === room.creatorId && (
+                  <SidebarMenuAction
+                    onClick={() => setDeleteRoom(room)}
+                    aria-label="Delete room"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </SidebarMenuAction>
+                )}
+              </SidebarMenuItem>
+            ))
+          )}
+        </SidebarMenu>
+      </SidebarContent>
+
+      <Dialog open={isCreateRoomOpen} onOpenChange={setCreateRoomOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create new room</DialogTitle>
+            <DialogDescription>
+              Enter a name for your new chat room.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={form.handleSubmit(handleCreateRoom)} className="space-y-4">
+            <Input {...form.register("name")} placeholder="e.g. General" />
+            <DialogFooter>
+              <Button type="submit" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? "Creating..." : "Create Room"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      
+      <AlertDialog open={!!deleteRoom} onOpenChange={(open) => !open && setDeleteRoom(null)}>
+        <AlertDialogContent>
+           <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the room "{deleteRoom?.name}" and all its messages.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteRoom(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteRoom} disabled={isDeleting} className="bg-destructive hover:bg-destructive/90">
+              {isDeleting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  )
+}
