@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Send, Smile, Paperclip, Loader2, Trash2, X } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -76,16 +76,16 @@ export default function ChatRoomPage() {
   }, [messages, isLoadingMessages]);
   
   useEffect(() => {
-    // Only act when loading is complete and an error exists.
-    if (!isLoadingRoom && roomError) {
+    // Redirect only if loading is complete and the room does not exist (either error or null data).
+    if (!isLoadingRoom && (!room || roomError)) {
       toast({
         variant: "destructive",
         title: "Error loading room",
-        description: "You may not have permission or the room may not exist.",
+        description: "The room may not exist or you don't have permission to view it.",
       });
       router.replace('/chat');
     }
-  }, [roomError, isLoadingRoom, router, toast]);
+  }, [room, isLoadingRoom, roomError, router, toast]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setNewMessage(e.target.value);
@@ -198,17 +198,9 @@ export default function ChatRoomPage() {
     return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
   
-  if (isLoadingRoom) {
+  if (isLoadingRoom || !room) {
     return <ChatSkeleton />;
   }
-  
-  // This check now correctly runs only after loading is complete.
-  // If there's no room data and no loading in progress, it means the room
-  // was not found or is inaccessible. The useEffect for `roomError` will handle the redirect.
-  if (!room) {
-    return <ChatSkeleton />;
-  }
-
 
   return (
     <div className="flex h-full max-h-full flex-col bg-slate-50 dark:bg-slate-900">
@@ -343,11 +335,9 @@ const ChatSkeleton = () => (
       <Loader2 className="h-8 w-8 animate-spin text-primary" />
     </div>
     <footer className="border-t p-2 md:p-4">
-      <div className="h-6" />
-      <div className="flex items-center gap-2">
-        <Skeleton className="h-10 flex-1" />
-        <Skeleton className="h-10 w-10 rounded-full" />
-      </div>
+      <Skeleton className="relative flex h-10 w-full rounded-md border border-input bg-background px-3 py-2" />
     </footer>
   </div>
 );
+
+    
