@@ -10,7 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCollection, useDoc, useFirestore, useUser, useMemoFirebase, addDocumentNonBlocking, deleteDocumentNonBlocking, useStorage } from '@/firebase';
-import { collection, doc, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, query, orderBy, serverTimestamp, limit } from 'firebase/firestore';
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
@@ -60,9 +60,14 @@ export default function ChatRoomPage() {
 
   const messagesQuery = useMemoFirebase(() => {
     if (!roomRef) return null;
-    return query(collection(roomRef, 'messages'), orderBy('timestamp', 'asc'));
+    return query(collection(roomRef, 'messages'), orderBy('timestamp', 'desc'), limit(50));
   }, [roomRef]);
   const { data: messages, isLoading: isLoadingMessages } = useCollection<Message>(messagesQuery);
+  
+  const sortedMessages = useMemo(() => {
+    if (!messages) return [];
+    return [...messages].sort((a, b) => a.timestamp?.toDate() - b.timestamp?.toDate());
+  }, [messages]);
   
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -73,7 +78,7 @@ export default function ChatRoomPage() {
         }, 100);
       }
     }
-  }, [messages, isLoadingMessages]);
+  }, [sortedMessages, isLoadingMessages]);
   
   useEffect(() => {
     if (!isLoadingRoom && !room && roomError) {
@@ -211,7 +216,7 @@ export default function ChatRoomPage() {
         <div className="p-4 md:p-6 space-y-6">
           {isLoadingMessages ? (
              <div className="flex items-center justify-center pt-10"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
-          ) : messages?.map((msg) => {
+          ) : sortedMessages.map((msg) => {
             const isCurrentUser = msg.senderId === user?.uid;
             return (
               <div
@@ -339,3 +344,5 @@ const ChatSkeleton = () => (
     </footer>
   </div>
 );
+
+    
