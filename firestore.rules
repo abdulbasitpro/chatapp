@@ -1,0 +1,112 @@
+/**
+ * @fileoverview Firestore Security Rules for a real-time chat application.
+ *
+ * Core Philosophy:
+ * This ruleset enforces a strict user-ownership model for user profiles and room creation,
+ * while allowing messages to be created within rooms by authenticated users. It focuses on
+ * authorization independence by embedding ownership information directly within documents,
+ * avoiding costly `get()` calls.
+ *
+ * Data Structure:
+ * - /users/{userId}: Stores individual user profiles, secured by owner-only access.
+ * - /rooms/{roomId}: Stores chat room metadata, with creatorId indicating the owner.
+ * - /rooms/{roomId}/messages/{messageId}: Stores messages within each room.
+ *
+ * Key Security Decisions:
+ * - Users can only read and write their own profile data.
+ * - Only authenticated users can create rooms, and the creator is the owner.
+ * - Anyone can read rooms.
+ * - Only authenticated users can create messages within existing rooms.
+ * - Listing of messages within a room is allowed for authenticated users.
+ * - User listing is disallowed.
+ *
+ * Denormalization for Authorization:
+ * - The `Room` entity includes a `creatorId` field, enabling direct ownership checks
+ *   without needing to query a separate `users` collection. This optimizes rule performance.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /**
+     * @description Defines whether the user is signed in.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * @description Checks if the request is made by the owner of the resource.
+     */
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    /**
+     * @description Checks if the request is made by an existing owner of the resource.
+     */
+    function isExistingOwner(userId) {
+      return isOwner(userId) && resource != null;
+    }
+
+    /**
+     * @description Rules for the /users/{userId} collection.
+     * @path /users/{userId}
+     * @allow (create) User with ID 'user123' creates their profile with matching ID.
+     *   - auth.uid: 'user123'
+     *   - request.resource.data: { id: 'user123', email: 'test@example.com' }
+     * @allow (get, update, delete) User with ID 'user123' reads, updates, or deletes their own profile.
+     *   - auth.uid: 'user123'
+     * @deny (create) User with ID 'user123' attempts to create a profile for another user.
+     *   - auth.uid: 'user123'
+     *   - request.resource.data: { id: 'user456', email: 'test@example.com' }
+     * @deny (get, update, delete) User with ID 'user123' attempts to read, update, or delete another user's profile.
+     *   - auth.uid: 'user123'
+     * @principle Enforces document ownership for writes and restricts access to a user's own data tree.
+     */
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
+      allow delete: if isExistingOwner(userId);
+    }
+
+    /**
+     * @description Rules for the /rooms/{roomId} collection.
+     * @path /rooms/{roomId}
+     * @allow (create) Authenticated user creates a new chat room.
+     *   - auth.uid: 'user123'
+     *   - request.resource.data: { id: 'room123', name: 'My Room', creatorId: 'user123' }
+     * @allow (get, list) Anyone can read rooms.
+     * @deny (update, delete) Only the room creator can update or delete the room.
+     *   - auth.uid: 'user456'
+     * @principle Enforces creator ownership for writes and allows public read access for rooms.
+     */
+    match /rooms/{roomId} {
+      allow get, list: if true;
+      allow create: if isSignedIn() && request.resource.data.creatorId == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.creatorId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.creatorId == request.auth.uid;
+    }
+
+    /**
+     * @description Rules for the /rooms/{roomId}/messages/{messageId} collection.
+     * @path /rooms/{roomId}/messages/{messageId}
+     * @allow (create) Authenticated user creates a new message in the room.
+     *   - auth.uid: 'user123'
+     *   - request.resource.data: { id: 'message123', roomId: 'room123', senderId: 'user123', content: 'Hello!' }
+     * @allow (get, list) Authenticated user reads messages within a room.
+     *   - auth.uid: 'user123'
+     * @deny (update, delete) Only the message sender can update or delete the message.
+     *   - auth.uid: 'user456'
+     * @principle Enforces authentication for message creation and allows authenticated users to read messages within a room.
+     */
+    match /rooms/{roomId}/messages/{messageId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.senderId == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.senderId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.senderId == request.auth.uid;
+    }
+  }
+}

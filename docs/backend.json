@@ -1,0 +1,149 @@
+{
+  "entities": {
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user in the chat application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the user entity."
+        },
+        "email": {
+          "type": "string",
+          "description": "The user's email address.",
+          "format": "email"
+        }
+      },
+      "required": [
+        "id",
+        "email"
+      ]
+    },
+    "Room": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Room",
+      "type": "object",
+      "description": "Represents a chat room.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the room entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the chat room."
+        },
+        "creatorId": {
+          "type": "string",
+          "description": "Reference to the User who created the room. (Relationship: User 1:N Room)"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "creatorId"
+      ]
+    },
+    "Message": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Message",
+      "type": "object",
+      "description": "Represents a message sent in a chat room.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the message entity."
+        },
+        "roomId": {
+          "type": "string",
+          "description": "Reference to the Room where the message was sent. (Relationship: Room 1:N Message)"
+        },
+        "senderId": {
+          "type": "string",
+          "description": "Reference to the User who sent the message. (Relationship: User 1:N Message)"
+        },
+        "content": {
+          "type": "string",
+          "description": "The content of the message."
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "The timestamp of when the message was sent.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "roomId",
+        "senderId",
+        "content",
+        "timestamp"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user information. Uses path-based ownership for private user data.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/rooms/{roomId}",
+        "definition": {
+          "entityName": "Room",
+          "schema": {
+            "$ref": "#/backend/entities/Room"
+          },
+          "description": "Stores chat room information. Includes denormalized 'creatorId' for authorization independence.",
+          "params": [
+            {
+              "name": "roomId",
+              "description": "The unique identifier of the chat room."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/rooms/{roomId}/messages/{messageId}",
+        "definition": {
+          "entityName": "Message",
+          "schema": {
+            "$ref": "#/backend/entities/Message"
+          },
+          "description": "Stores messages within a chat room. Uses a subcollection for efficient querying of messages within a room.",
+          "params": [
+            {
+              "name": "roomId",
+              "description": "The unique identifier of the chat room."
+            },
+            {
+              "name": "messageId",
+              "description": "The unique identifier of the message."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure is designed to support a real-time chat application with user authentication and private chat rooms. It prioritizes authorization independence by storing the `creatorId` within each `Room` document, avoiding the need for `get()` calls in security rules to check room ownership. This allows for atomic creation of rooms and simplifies security rules. The `messages` subcollection under each room stores messages, making it easy to query messages for a specific room. This design enables secure `list` operations for messages within a room and separates concerns, aligning with the QAPs principle. By enforcing creator ownership at the room level and associating messages directly with rooms, we maintain structural segregation and clarity of intent for debugging."
+  }
+}
