@@ -1,86 +1,90 @@
 /**
- * @fileoverview Firestore Security Rules for a real-time chat application.
+ * @fileoverview Firestore Security Rules for Chat Application
  *
  * Core Philosophy:
- * This ruleset enforces a user-ownership model for user profiles and creator-ownership for chat rooms.
- * Users can only read and write their own profile data. Chat rooms can only be deleted by their creator.
+ * This ruleset enforces a strict ownership model for user data and room creation,
+ * while allowing public read access to chat rooms and messages. Authorization
+ * decisions are made independently at each level, avoiding the need for chained
+ * `get()` calls.
  *
  * Data Structure:
- * - /users/{userId}: Stores individual user profiles. Access is restricted to the owning user.
- * - /rooms/{roomId}: Stores chat room metadata, including the creator.
- * - /rooms/{roomId}/messages/{messageId}: Stores individual messages within a chat room.
+ * - /users/{userId}: Stores private user profiles, accessible only to the owning user.
+ * - /rooms/{roomId}: Stores chat room metadata, with access control based on room creator.
+ * - /rooms/{roomId}/messages/{messageId}: Stores messages within a chat room; all authenticated users can read and write messages in any room.
  *
  * Key Security Decisions:
- * - Users can only manage their own profiles.
- * - Chat rooms can only be deleted by their creator.
- * - Listing of users is disallowed.
+ * - Users can only read and write their own profile data.
+ * - Room creation is restricted to authenticated users.
+ * - Message creation is restricted to authenticated users.
+ * - Listing all users is disallowed for privacy.
+ * - Public read access is granted for chat rooms and messages.
  *
  * Denormalization for Authorization:
- * - The `Room` entity includes a `creatorId` field to simplify ownership checks during deletion.
+ * - The `Room` entity includes a `creatorId` field, which is used to authorize updates and deletes. This avoids the need for security rules to perform additional reads to determine room ownership.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Controls access to user profiles.
+     * @description Protects user profiles, ensuring only the owning user can read and write their data.
      * @path /users/{userId}
-     * @allow (create) - If the user is creating their own profile (userId matches auth.uid).
-     * @allow (get, update, delete) - If the user is the owner of the profile (userId matches auth.uid).
-     * @deny (create) - If the user ID in the path does not match the authenticated user's ID.
-     * @deny (get, update, delete) - If the user ID in the path does not match the authenticated user's ID.
-     * @principle Enforces document ownership for user profiles.
+     * @allow (get, create, update, delete) if the user is the owner (userId matches request.auth.uid).
+     * @deny (get, create, update, delete) if the user is not the owner.
+     * @principle Enforces document ownership for writes.
      */
     match /users/{userId} {
-      // Validate that the userId is available
       function isOwner(userId) {
         return request.auth != null && request.auth.uid == userId;
       }
-
       allow get: if isOwner(userId);
       allow list: if false;
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId);
-      allow delete: if isOwner(userId);
+      allow create: if isOwner(userId) && request.resource.data.id == request.auth.uid;
+      allow update: if isOwner(userId) && resource.data.id == request.resource.data.id;
+      allow delete: if isOwner(userId) && resource != null;
     }
 
     /**
-     * @description Controls access to chat rooms.
+     * @description Manages chat rooms, restricting creation to authenticated users and updates/deletes to the room creator.
      * @path /rooms/{roomId}
-     * @allow (get, list) - Public read access to room metadata.
-     * @allow (create) - Anyone can create a chat room. The 'creatorId' field in the data must match the authenticated user's ID.
-     * @allow (delete) - Only the user who created the room can delete it.
-     * @deny (update) - No updates allowed (for prototyping, this simplifies security).
-     * @principle Enforces creator ownership for chat rooms. Public read, owner-only delete.
+     * @allow (get, list) any authenticated user can read chat room data.
+     * @allow (create) any authenticated user can create a chat room, if creatorId is set to their user id.
+     * @allow (update, delete) only the room creator can modify or delete the room.
+     * @deny (create) if the creatorId does not match the authenticated user's ID.
+     * @principle Enforces creator-based ownership for chat rooms.
      */
     match /rooms/{roomId} {
+      function isSignedIn() {
+        return request.auth != null;
+      }
       function isRoomCreator(creatorId) {
         return request.auth != null && request.auth.uid == creatorId;
       }
-
+      function isExistingRoomCreator(creatorId) {
+        return isRoomCreator(creatorId) && resource != null;
+      }
       allow get, list: if true;
-      allow create: if request.auth != null && request.resource.data.creatorId == request.auth.uid;
-      allow update: if false; // No updates allowed for simplicity in the prototype.
-
-      allow delete: if isRoomCreator(resource.data.creatorId) && resource != null;
-     }
+      allow create: if isSignedIn() && request.resource.data.creatorId == request.auth.uid;
+      allow update: if isExistingRoomCreator(resource.data.creatorId);
+      allow delete: if isExistingRoomCreator(resource.data.creatorId);
+    }
 
     /**
-     * @description Controls access to messages within a chat room.
+     * @description Manages messages within a chat room; any authenticated user can read and create messages.
      * @path /rooms/{roomId}/messages/{messageId}
-     * @allow (get, list) - Public read access to all messages in a room.
-     * @allow (create) - Any authenticated user can send a message to a room.
-     * @deny (update, delete) - No updates or deletes allowed (for prototyping, this simplifies security).
-     * @principle Public read, authenticated write for messages within a room.
+     * @allow (get, list) any authenticated user can read messages.
+     * @allow (create) any authenticated user can create a message within any room.
+     * @deny (update, delete) no one can update or delete messages.
+     * @principle Allows public read access to messages while restricting modification.
      */
     match /rooms/{roomId}/messages/{messageId} {
       function isSignedIn() {
         return request.auth != null;
       }
-
       allow get, list: if true;
       allow create: if isSignedIn();
-      allow update, delete: if false;
+      allow update: if false;
+      allow delete: if false;
     }
   }
 }
