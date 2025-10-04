@@ -135,11 +135,12 @@ function ChatSidebar() {
           ) : (
             rooms?.map((room) => (
               <SidebarMenuItem key={room.id}>
-                <Link href={`/chat/rooms/${room.id}`} passHref className="flex-1" onClick={() => setOpenMobile(false)}>
+                <Link href={`/chat/rooms/${room.id}`} passHref className="flex-1">
                   <SidebarMenuButton
                     isActive={pathname === `/chat/rooms/${room.id}`}
                     tooltip={{ children: room.name, side: 'right' }}
                     className="justify-start"
+                    onClick={() => setOpenMobile(false)}
                   >
                     <Users className="text-muted-foreground" />
                     <span>{room.name}</span>
@@ -283,4 +284,5 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
 // Helper type for useCollection
 type WithId<T> = T & { id: string };
 
+    
     
