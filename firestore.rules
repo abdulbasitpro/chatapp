@@ -1,110 +1,86 @@
-/**
- * @fileoverview Firestore Security Rules for the chat application.
- *
- * Core Philosophy:
- * This ruleset enforces a user-ownership model for user profiles and room creation.
- * Room creators have full control over their rooms, and messages are associated with rooms.
- *
- * Data Structure:
- * - /users/{userId}: Stores user profiles; access is restricted to the owning user.
- * - /rooms/{roomId}: Stores chat rooms; access is restricted to the room creator.
- * - /rooms/{roomId}/messages/{messageId}: Stores messages within a room; access is restricted to room members (creator).
- *
- * Key Security Decisions:
- * - Users can only read and write their own profile data.
- * - Room creation is open to any authenticated user.
- * - Only the room creator can update or delete a room.
- * - Listing all users is disallowed for privacy.
- * - Messages inherit the security context of their parent room.
- *
- * Denormalization for Authorization:
- * - Rooms store the `creatorId` to avoid needing a `get()` call to the user document for authorization.
- */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Controls access to user profiles.
+     * @description Secures user profiles, allowing only the user to manage their own data.
      * @path /users/{userId}
-     * @allow (create) - User with UID 'user123' can create their profile at /users/user123.
-     * @deny (create) - User with UID 'user456' cannot create a profile at /users/user123.
-     * @allow (get) - User with UID 'user123' can read their profile at /users/user123.
-     * @deny (get) - User with UID 'user456' cannot read the profile at /users/user123.
-     * @allow (update) - User with UID 'user123' can update their profile at /users/user123.
-     * @deny (update) - User with UID 'user456' cannot update the profile at /users/user123.
-     * @allow (delete) - User with UID 'user123' can delete their profile at /users/user123.
-     * @deny (delete) - User with UID 'user456' cannot delete the profile at /users/user123.
-     * @allow (list) - User with UID 'user123' can list their own profile at /users/user123.
-     * @deny (list) - User with UID 'user456' cannot list the profile at /users/user123.
+     * @allow (get, create, update, delete) if the request is made by the user with the matching userId.
+     * @deny (get, create, update, delete) if the request is made by a different user.
      * @principle Enforces document ownership for all operations.
      */
     match /users/{userId} {
       allow get: if isOwner(userId);
       allow list: if false;
-      allow create: if request.auth.uid == userId;
+      allow create: if isOwner(userId);
       allow update: if isOwner(userId);
       allow delete: if isOwner(userId);
     }
 
     /**
-     * @description Controls access to chat rooms.
+     * @description Secures chat rooms, allowing anyone to read, but only the creator to update or delete.
      * @path /rooms/{roomId}
-     * @allow (create) - User with UID 'user123' can create a room.
-     * @deny (create) - Unauthenticated user cannot create a room.
-     * @allow (get) - Any authenticated user can read room data.
-     * @deny (get) - Unauthenticated user cannot read room data.
-     * @allow (update) - Only the room creator (creatorId) can update the room.
-     * @deny (update) - User with UID 'user456' cannot update a room created by 'user123'.
-     * @allow (delete) - Only the room creator (creatorId) can delete the room.
-     * @deny (delete) - User with UID 'user456' cannot delete a room created by 'user123'.
-     * @principle Enforces creator ownership for room modifications and allows public read access.
+     * @allow (get, list) if true (public read).
+     * @allow (create) if the request includes a valid creatorId matching the user's ID.
+     * @allow (update, delete) if the request is made by the room creator.
+     * @deny (create, update, delete) if the request is made by a non-creator.
+     * @principle Enforces creator-based ownership for writes, allows public reads.
      */
     match /rooms/{roomId} {
-      allow get, list: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if isRoomOwner(roomId);
-      allow delete: if isRoomOwner(roomId);
-
-       match /messages/{messageId} {
-          allow get, list: if isSignedIn();
-          allow create: if isSignedIn();
-          allow update: if isMessageOwner(roomId);
-          allow delete: if isMessageOwner(roomId);
-        }
+      allow get: if true;
+      allow list: if true;
+      allow create: if request.auth.uid != null && request.resource.data.creatorId == request.auth.uid;
+      allow update: if request.auth.uid != null && resource.data.creatorId == request.auth.uid;
+      allow delete: if request.auth.uid != null && resource.data.creatorId == request.auth.uid;
     }
 
-      /**
-       * @description Controls access to status messages.
-       * @path /status
-       * @allow (list) - Any authenticated user can read status messages.
-       */
-      match /status {
-        allow get, list: if isSignedIn();
-        allow create: if false;
-        allow update: if false;
-        allow delete: if false;
-      }
-  }
+    /**
+     * @description Secures messages within a chat room, allowing anyone to read, but only the sender to create.
+     * @path /rooms/{roomId}/messages/{messageId}
+     * @allow (get, list) if true (public read).
+     * @allow (create) if the request includes a valid senderId matching the user's ID.
+     * @allow (update, delete) if false (no updates or deletes allowed).
+     * @deny (create) if the request is made by a different user.
+     * @principle Enforces sender-based creation for messages, allows public reads, no updates or deletes.
+     */
+    match /rooms/{roomId}/messages/{messageId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if request.auth.uid != null && request.resource.data.senderId == request.auth.uid;
+      allow update: if false;
+      allow delete: if false;
+    }
 
-  // Helper functions
-  function isSignedIn() {
-    return request.auth != null;
-  }
+    /**
+     * @description Secures typing statuses within a chat room, allowing only the user to delete their own status.
+     * @path /rooms/{roomId}/typing_statuses/{userId}
+     * @allow get: if false;
+     * @allow list: if false;
+     * @allow create: if false;
+     * @allow update: if false;
+     * @allow delete: if isOwner(userId) && resource != null;
+     * @principle Enforces user-based deletion of their typing status.
+     */
+    match /rooms/{roomId}/typing_statuses/{userId} {
+      allow get: if false;
+      allow list: if false;
+      allow create: if false;
+      allow update: if false;
+      allow delete: if request.auth.uid != null && request.auth.uid == userId;
+    }
 
-  function isOwner(userId) {
-    return request.auth.uid == userId;
-  }
 
-  function isExistingOwner(userId) {
-    return isOwner(userId);
-  }
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
 
-  function isRoomOwner(roomId) {
-    return resource.data.creatorId == request.auth.uid;
-  }
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
 
-    function isMessageOwner(roomId) {
-    return get(/databases/$(database)/documents/rooms/$(roomId)).data.creatorId == request.auth.uid;
+    function isExistingOwner(userId) {
+        return isOwner(userId) && resource != null;
+    }
   }
 }
