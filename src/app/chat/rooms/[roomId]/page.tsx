@@ -76,8 +76,6 @@ export default function ChatRoomPage() {
   }, [messages, isLoadingMessages]);
 
   useEffect(() => {
-    // Only redirect if loading is finished, there's no room data, and no error occurred.
-    // An error would be handled separately, e.g. showing a permissions error.
     if (!isLoadingRoom && !room && !roomError) {
       router.replace('/chat');
     }
@@ -181,16 +179,15 @@ export default function ChatRoomPage() {
     return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
   
-  if (isLoadingRoom) {
+  if (isLoadingRoom || (!room && !roomError)) {
     return <ChatSkeleton />;
   }
 
-  // If loading is done and there's still no room, and there was no error,
-  // it implies the redirect is about to happen. We can show a loader or nothing.
-  if (!room) {
-    return <ChatSkeleton />;
+  // If there's an error fetching the room (e.g., permissions), you could show an error component.
+  if (roomError) {
+    // You can create a specific error component for this
+    return <div className="flex h-full items-center justify-center text-destructive">Error loading room.</div>;
   }
-
 
   return (
     <div className="flex h-full max-h-full flex-col">
@@ -331,5 +328,3 @@ const ChatSkeleton = () => (
     </footer>
   </div>
 );
-
-    
