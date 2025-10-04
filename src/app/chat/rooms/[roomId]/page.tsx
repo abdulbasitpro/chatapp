@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Send, Smile, Paperclip, Loader2, Trash2, Upload } from 'lucide-react';
+import { Send, Smile, Paperclip, Loader2, Trash2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -56,7 +56,7 @@ export default function ChatRoomPage() {
     if (!firestore || !roomId) return null;
     return doc(firestore, 'rooms', roomId);
   }, [firestore, roomId]);
-  const { data: room, isLoading: isLoadingRoom } = useDoc<{ name: string }>(roomRef);
+  const { data: room, isLoading: isLoadingRoom, error: roomError } = useDoc<{ name: string }>(roomRef);
 
   const messagesQuery = useMemoFirebase(() => {
     if (!roomRef) return null;
@@ -76,10 +76,12 @@ export default function ChatRoomPage() {
   }, [messages, isLoadingMessages]);
 
   useEffect(() => {
-    if (!isLoadingRoom && !room) {
+    // Only redirect if loading is finished, there's no room data, and no error occurred.
+    // An error would be handled separately, e.g. showing a permissions error.
+    if (!isLoadingRoom && !room && !roomError) {
       router.replace('/chat');
     }
-  }, [isLoadingRoom, room, router]);
+  }, [isLoadingRoom, room, roomError, router]);
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
@@ -112,6 +114,7 @@ export default function ChatRoomPage() {
   const handleFileUpload = (file: File) => {
     if (!file || !user || !roomId) return;
     
+    setUploadProgress(0);
     const filePath = `chat_files/${roomId}/${Date.now()}_${file.name}`;
     const fileStorageRef = storageRef(storage, filePath);
     const uploadTask = uploadBytesResumable(fileStorageRef, file);
@@ -178,9 +181,16 @@ export default function ChatRoomPage() {
     return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
   
-  if (isLoadingRoom || !room) {
+  if (isLoadingRoom) {
     return <ChatSkeleton />;
   }
+
+  // If loading is done and there's still no room, and there was no error,
+  // it implies the redirect is about to happen. We can show a loader or nothing.
+  if (!room) {
+    return <ChatSkeleton />;
+  }
+
 
   return (
     <div className="flex h-full max-h-full flex-col">
@@ -245,7 +255,7 @@ export default function ChatRoomPage() {
         </div>
       </ScrollArea>
       <footer className="border-t p-2 md:p-4 bg-background/95 backdrop-blur-sm">
-        {uploadingFile && uploadProgress > 0 && (
+        {uploadingFile && uploadProgress > 0 && uploadProgress < 100 && (
           <div className="px-2 pb-2">
             <Progress value={uploadProgress} className="w-full h-2" />
             <p className="text-xs text-center text-muted-foreground mt-1">Uploading {uploadingFile.name}... ({Math.round(uploadProgress)}%)</p>
@@ -258,7 +268,7 @@ export default function ChatRoomPage() {
             placeholder={uploadingFile ? uploadingFile.name : "Type a message..."}
             autoComplete="off"
             className="pr-28 bg-background"
-            disabled={!user || (uploadingFile && uploadProgress > 0)}
+            disabled={!user || (uploadingFile && uploadProgress > 0 && uploadProgress < 100)}
           />
            <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" />
           <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center">
@@ -321,3 +331,5 @@ const ChatSkeleton = () => (
     </footer>
   </div>
 );
+
+    
