@@ -8,10 +8,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-export default function LoginPage() {
+export default function SignupPage() {
   const router = useRouter();
 
-  const handleLogin = (event: React.FormEvent) => {
+  const handleSignup = (event: React.FormEvent) => {
     event.preventDefault();
     router.push('/chat');
   };
@@ -24,11 +24,15 @@ export default function LoginPage() {
             <div className="flex justify-center items-center mb-4">
               <MessageCircle className="h-12 w-12 text-primary" />
             </div>
-            <CardTitle className="font-headline text-3xl">Welcome to Chatapp</CardTitle>
-            <CardDescription>Enter your credentials to start chatting.</CardDescription>
+            <CardTitle className="font-headline text-3xl">Create an Account</CardTitle>
+            <CardDescription>Join Chatapp and connect with others.</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleLogin} className="space-y-6">
+            <form onSubmit={handleSignup} className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="name">Name</Label>
+                <Input id="name" type="text" placeholder="Your Name" required />
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input id="email" type="email" placeholder="name@example.com" required />
@@ -38,13 +42,13 @@ export default function LoginPage() {
                 <Input id="password" type="password" required />
               </div>
               <Button type="submit" className="w-full" variant="accent">
-                Login <ArrowRight className="ml-2 h-4 w-4" />
+                Sign Up <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </form>
             <div className="mt-6 text-center text-sm">
-              Don't have an account?{' '}
-              <Link href="/signup" className="underline text-primary font-medium">
-                Sign up
+              Already have an account?{' '}
+              <Link href="/" className="underline text-primary font-medium">
+                Login
               </Link>
             </div>
           </CardContent>
