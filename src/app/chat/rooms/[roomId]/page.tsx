@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useMemo } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Send, Smile, Paperclip, Loader2, Trash2, X } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -76,8 +76,7 @@ export default function ChatRoomPage() {
   }, [messages, isLoadingMessages]);
   
   useEffect(() => {
-    // Redirect only if loading is complete and the room does not exist (either error or null data).
-    if (!isLoadingRoom && (!room || roomError)) {
+    if (!isLoadingRoom && !room && !roomError) {
       toast({
         variant: "destructive",
         title: "Error loading room",
@@ -86,6 +85,7 @@ export default function ChatRoomPage() {
       router.replace('/chat');
     }
   }, [room, isLoadingRoom, roomError, router, toast]);
+
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setNewMessage(e.target.value);
@@ -121,7 +121,7 @@ export default function ChatRoomPage() {
   }
 
   const handleFileUpload = (file: File) => {
-    if (!file || !user || !roomId) return;
+    if (!file || !user || !roomId || !storage) return;
     
     setUploadProgress(0);
     const filePath = `chat_files/${roomId}/${Date.now()}_${file.name}`;
@@ -176,20 +176,16 @@ export default function ChatRoomPage() {
 
   const handleDeleteMessage = async () => {
     if (!firestore || !messageToDelete || !roomRef || isDeleting) return;
-    
+
     setIsDeleting(true);
 
-    try {
-      const messageRef = doc(roomRef, 'messages', messageToDelete.id);
-      deleteDocumentNonBlocking(messageRef);
-      toast({ title: "Message deleted" });
-    } catch (error) {
-      console.error("Error deleting message:", error);
-      toast({ variant: "destructive", title: "Error", description: "Failed to delete message." });
-    } finally {
-      setIsDeleting(false);
-      setMessageToDelete(null);
-    }
+    const messageRef = doc(roomRef, 'messages', messageToDelete.id);
+    deleteDocumentNonBlocking(messageRef);
+
+    toast({ title: "Message deleted" });
+    
+    setIsDeleting(false);
+    setMessageToDelete(null);
   };
 
   const formatTimestamp = (timestamp: any) => {
@@ -198,7 +194,7 @@ export default function ChatRoomPage() {
     return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
   
-  if (isLoadingRoom || !room) {
+  if (isLoadingRoom || (!room && !roomError)) {
     return <ChatSkeleton />;
   }
 
@@ -339,5 +335,3 @@ const ChatSkeleton = () => (
     </footer>
   </div>
 );
-
-    
