@@ -9,8 +9,8 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useCollection, useDoc, useFirestore, useUser, useMemoFirebase, addDocumentNonBlocking, deleteDocumentNonBlocking, useStorage } from '@/firebase';
-import { collection, doc, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { useCollection, useDoc, useFirestore, useUser, useMemoFirebase, addDocumentNonBlocking, deleteDocumentNonBlocking, useStorage, setDocumentNonBlocking } from '@/firebase';
+import { collection, doc, query, orderBy, serverTimestamp, where, Timestamp } from 'firebase/firestore';
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
@@ -32,6 +32,12 @@ type Message = {
   fileType?: string;
 };
 
+type TypingStatus = {
+  id: string;
+  userName: string;
+  timestamp: Timestamp;
+}
+
 export default function ChatRoomPage() {
   const params = useParams();
   const router = useRouter();
@@ -51,6 +57,8 @@ export default function ChatRoomPage() {
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
 
   const roomRef = useMemoFirebase(() => {
     if (!firestore || !roomId) return null;
@@ -64,6 +72,19 @@ export default function ChatRoomPage() {
   }, [roomRef]);
   const { data: messages, isLoading: isLoadingMessages } = useCollection<Message>(messagesQuery);
   
+  const typingStatusesQuery = useMemoFirebase(() => {
+    if (!roomRef) return null;
+    const tenSecondsAgo = Timestamp.fromMillis(Date.now() - 10000);
+    return query(collection(roomRef, 'typing_statuses'), where('timestamp', '>', tenSecondsAgo));
+  }, [roomRef]);
+
+  const { data: typingStatuses } = useCollection<TypingStatus>(typingStatusesQuery);
+
+  const typingUsers = useMemo(() => {
+    return typingStatuses?.filter(status => status.id !== user?.uid).map(status => status.userName) || [];
+  }, [typingStatuses, user?.uid]);
+
+
   useEffect(() => {
     if (scrollAreaRef.current) {
       const viewport = scrollAreaRef.current.querySelector('div[data-radix-scroll-area-viewport]');
@@ -73,17 +94,64 @@ export default function ChatRoomPage() {
         }, 100);
       }
     }
-  }, [messages, isLoadingMessages]);
+  }, [messages, isLoadingMessages, typingUsers]);
 
   useEffect(() => {
-    if (!isLoadingRoom && !room && !roomError) {
+    if (!isLoadingRoom && !room && roomError) {
       router.replace('/chat');
     }
   }, [isLoadingRoom, room, roomError, router]);
 
+  const updateTypingStatus = () => {
+    if (!user || !roomRef) return;
+    const typingStatusRef = doc(roomRef, 'typing_statuses', user.uid);
+    setDocumentNonBlocking(typingStatusRef, {
+      userName: user.displayName,
+      timestamp: serverTimestamp(),
+    }, {});
+  };
+
+  const removeTypingStatus = () => {
+    if (!user || !roomRef) return;
+    const typingStatusRef = doc(roomRef, 'typing_statuses', user.uid);
+    deleteDocumentNonBlocking(typingStatusRef);
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setNewMessage(e.target.value);
+    
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    
+    updateTypingStatus();
+
+    typingTimeoutRef.current = setTimeout(() => {
+       removeTypingStatus();
+    }, 3000); // User is considered to have stopped typing after 3 seconds
+  };
+
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      if(user && roomRef){
+        removeTypingStatus();
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, roomRef]);
+
+
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if ((newMessage.trim() === '' && !uploadingFile) || !user || !roomRef) return;
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    removeTypingStatus();
     
     if (uploadingFile) {
       handleFileUpload(uploadingFile);
@@ -179,14 +247,12 @@ export default function ChatRoomPage() {
     return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
   
-  if (isLoadingRoom || (!room && !roomError)) {
+  if (isLoadingRoom || !room) {
     return <ChatSkeleton />;
   }
 
-  // If there's an error fetching the room (e.g., permissions), you could show an error component.
   if (roomError) {
-    // You can create a specific error component for this
-    return <div className="flex h-full items-center justify-center text-destructive">Error loading room.</div>;
+    return <div className="flex h-full items-center justify-center text-destructive">Error loading room. It may not exist or you may not have permission to view it.</div>;
   }
 
   return (
@@ -251,7 +317,12 @@ export default function ChatRoomPage() {
           )}
         </div>
       </ScrollArea>
-      <footer className="border-t p-2 md:p-4 bg-background/95 backdrop-blur-sm">
+       <footer className="border-t p-2 md:p-4 bg-background/95 backdrop-blur-sm">
+        <div className="h-6 px-2 text-xs text-muted-foreground">
+          {typingUsers.length > 0 &&
+            `${typingUsers.join(', ')} ${typingUsers.length === 1 ? 'is' : 'are'} typing...`
+          }
+        </div>
         {uploadingFile && uploadProgress > 0 && uploadProgress < 100 && (
           <div className="px-2 pb-2">
             <Progress value={uploadProgress} className="w-full h-2" />
@@ -261,7 +332,7 @@ export default function ChatRoomPage() {
         <form onSubmit={handleSendMessage} className="relative">
           <Input
             value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
+            onChange={handleInputChange}
             placeholder={uploadingFile ? uploadingFile.name : "Type a message..."}
             autoComplete="off"
             className="pr-28 bg-background"
@@ -321,6 +392,7 @@ const ChatSkeleton = () => (
       <Loader2 className="h-8 w-8 animate-spin text-primary" />
     </div>
     <footer className="border-t p-2 md:p-4">
+      <div className="h-6" />
       <div className="flex items-center gap-2">
         <Skeleton className="h-10 flex-1" />
         <Skeleton className="h-10 w-10 rounded-full" />
