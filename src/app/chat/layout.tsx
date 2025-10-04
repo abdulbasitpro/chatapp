@@ -29,7 +29,7 @@ import { useAuth, useUser, useCollection, useFirestore, useMemoFirebase, deleteD
 import { signOut } from "firebase/auth";
 import { collection, query, orderBy, doc, getDocs, writeBatch } from "firebase/firestore";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle as AlertDialogTitleComponent } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -37,6 +37,7 @@ import { z } from "zod";
 import { addDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 import { useToast } from "@/hooks/use-toast";
 import { Room } from "@/lib/data";
+import { cn } from "@/lib/utils";
 
 const createRoomSchema = z.object({
   name: z.string().min(1, "Room name is required"),
@@ -85,28 +86,32 @@ function ChatSidebar() {
 
   const handleDeleteRoom = async () => {
     if (!firestore || !deleteRoom) return;
-
     setIsDeleting(true);
-    const roomRef = doc(firestore, 'rooms', deleteRoom.id);
-    const messagesRef = collection(roomRef, 'messages');
-    
-    const messagesSnapshot = await getDocs(messagesRef);
-    const batch = writeBatch(firestore);
-    messagesSnapshot.forEach(doc => {
-      batch.delete(doc.ref);
-    });
-    batch.delete(roomRef);
+    try {
+      const roomRef = doc(firestore, 'rooms', deleteRoom.id);
+      const messagesRef = collection(roomRef, 'messages');
+      
+      const messagesSnapshot = await getDocs(messagesRef);
+      const batch = writeBatch(firestore);
+      messagesSnapshot.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      batch.delete(roomRef);
 
-    await batch.commit();
+      await batch.commit();
 
-    toast({ title: "Room deleted", description: `Room "${deleteRoom.name}" and all its messages have been deleted.` });
+      toast({ title: "Room deleted", description: `Room "${deleteRoom.name}" and all its messages have been deleted.` });
 
-    if (pathname.includes(deleteRoom.id)) {
-      router.push('/chat');
+      if (pathname.includes(deleteRoom.id)) {
+        router.push('/chat');
+      }
+    } catch (error) {
+      console.error("Error deleting room:", error);
+      toast({ variant: "destructive", title: "Error", description: "Could not delete room." });
+    } finally {
+      setIsDeleting(false);
+      setDeleteRoom(null);
     }
-    
-    setIsDeleting(false);
-    setDeleteRoom(null);
   };
 
   return (
@@ -175,8 +180,8 @@ function ChatSidebar() {
       </Dialog>
       <AlertDialog open={!!deleteRoom} onOpenChange={(open) => !open && setDeleteRoom(null)}>
         <AlertDialogContent>
+          <AlertDialogTitleComponent>Are you absolutely sure?</AlertDialogTitleComponent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
               This will permanently delete the room "{deleteRoom?.name}" and all of its messages. This action cannot be undone.
             </AlertDialogDescription>
@@ -280,3 +285,5 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
 
 // Helper type for useCollection
 type WithId<T> = T & { id: string };
+
+    
