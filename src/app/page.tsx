@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, MessageCircle } from 'lucide-react';
+import { ArrowRight, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -17,14 +17,14 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-4 bg-background">
+    <main className="flex min-h-screen flex-col items-center justify-center p-4" style={{backgroundImage: "url('/background.svg')"}}>
       <div className="w-full max-w-md">
-        <Card className="shadow-lg">
+        <Card className="shadow-lg bg-card/80 backdrop-blur-sm">
           <CardHeader className="text-center">
             <div className="flex justify-center items-center mb-4">
-              <MessageCircle className="h-12 w-12 text-primary" />
+              <MessageSquare className="h-12 w-12 text-primary" />
             </div>
-            <CardTitle className="font-headline text-3xl">Welcome to Chatapp</CardTitle>
+            <CardTitle className="font-headline text-3xl">Welcome to Chatify</CardTitle>
             <CardDescription>Enter your credentials to start chatting.</CardDescription>
           </CardHeader>
           <CardContent>
@@ -37,7 +37,7 @@ export default function LoginPage() {
                 <Label htmlFor="password">Password</Label>
                 <Input id="password" type="password" required />
               </div>
-              <Button type="submit" className="w-full" variant="accent">
+              <Button type="submit" className="w-full" variant="default">
                 Login <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </form>

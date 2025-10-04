@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import { Send } from 'lucide-react';
+import { Send, Smile, Paperclip, Mic } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,7 +29,6 @@ export default function ChatRoomPage() {
     if (foundRoom) {
       setMessages(foundRoom.messages);
     }
-    // Simulate network delay
     setTimeout(() => setIsLoading(false), 300);
   }, [roomId]);
   
@@ -60,7 +59,7 @@ export default function ChatRoomPage() {
   };
 
   if (isLoading) {
-    return <ChatSkeleton />;
+    return <div className="p-4 md:p-6"><ChatSkeleton /></div>;
   }
 
   if (!room) {
@@ -68,72 +67,83 @@ export default function ChatRoomPage() {
   }
 
   return (
-    <div className="flex h-full max-h-full flex-col bg-card rounded-lg border shadow-sm">
-      <header className="border-b p-4 flex items-center">
-        <h2 className="font-headline text-xl font-semibold">{room.name}</h2>
-      </header>
-      <ScrollArea className="flex-1" ref={scrollAreaRef}>
-        <div className="p-4 md:p-6 space-y-6">
-            {messages.map((msg) => {
-              const user = findUserById(msg.userId);
-              const isCurrentUser = msg.userId === currentUser.id;
-              return (
-                <div
-                  key={msg.id}
-                  className={cn(
-                    "flex items-end gap-3 animate-in fade-in",
-                    isCurrentUser ? "justify-end" : "justify-start"
-                  )}
-                >
-                  {!isCurrentUser && user && (
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage src={user.avatarUrl} alt={user.name} />
-                      <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
-                    </Avatar>
-                  )}
+    <div className="flex h-full max-h-full flex-col p-4 md:p-6">
+      <div className="flex h-full max-h-full flex-col bg-card/80 backdrop-blur-sm rounded-lg border shadow-sm">
+        <header className="border-b p-4 flex items-center">
+          <h2 className="font-headline text-xl font-semibold">{room.name}</h2>
+        </header>
+        <ScrollArea className="flex-1" ref={scrollAreaRef}>
+          <div className="p-4 md:p-6 space-y-6">
+              {messages.map((msg) => {
+                const user = findUserById(msg.userId);
+                const isCurrentUser = msg.userId === currentUser.id;
+                return (
                   <div
+                    key={msg.id}
                     className={cn(
-                      "max-w-xs md:max-w-md lg:max-w-lg rounded-lg px-4 py-3 shadow-sm",
-                      isCurrentUser
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted"
+                      "flex items-end gap-3 animate-in fade-in",
+                      isCurrentUser ? "justify-end" : "justify-start"
                     )}
                   >
-                    {!isCurrentUser && user && <p className="text-xs font-bold mb-1">{user.name}</p>}
-                    <p className="text-sm break-words">{msg.text}</p>
-                    <p className="text-xs mt-1 opacity-70 text-right">{msg.timestamp}</p>
+                    {!isCurrentUser && user && (
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src={user.avatarUrl} alt={user.name} />
+                        <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                    )}
+                    <div
+                      className={cn(
+                        "max-w-xs md:max-w-md lg:max-w-lg rounded-lg px-4 py-3 shadow-sm",
+                        isCurrentUser
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-background border"
+                      )}
+                    >
+                      {!isCurrentUser && user && <p className="text-xs font-bold mb-1 text-primary">{user.name}</p>}
+                      <p className="text-sm break-words">{msg.text}</p>
+                      <p className="text-xs mt-1 opacity-70 text-right">{msg.timestamp}</p>
+                    </div>
+                    {isCurrentUser && user && (
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src={user.avatarUrl} alt={user.name} />
+                        <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                    )}
                   </div>
-                  {isCurrentUser && user && (
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage src={user.avatarUrl} alt={user.name} />
-                      <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
-                    </Avatar>
-                  )}
-                </div>
-              );
-            })}
-        </div>
-      </ScrollArea>
-      <footer className="border-t p-2 md:p-4">
-        <form onSubmit={handleSendMessage} className="flex items-center gap-2">
-          <Input
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            placeholder="Type a message..."
-            autoComplete="off"
-          />
-          <Button type="submit" size="icon" variant="accent" disabled={!newMessage.trim()}>
-            <Send className="h-4 w-4" />
-            <span className="sr-only">Send</span>
-          </Button>
-        </form>
-      </footer>
+                );
+              })}
+          </div>
+        </ScrollArea>
+        <footer className="border-t p-2 md:p-4">
+          <form onSubmit={handleSendMessage} className="relative">
+            <Input
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              placeholder="Type a message..."
+              autoComplete="off"
+              className="pr-28"
+            />
+            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center">
+              <Button type="button" size="icon" variant="ghost">
+                <Smile className="h-5 w-5" />
+              </Button>
+              <Button type="button" size="icon" variant="ghost">
+                <Paperclip className="h-5 w-5" />
+              </Button>
+              <Button type="submit" size="icon" variant="ghost" disabled={!newMessage.trim()}>
+                <Send className="h-5 w-5 text-primary" />
+                <span className="sr-only">Send</span>
+              </Button>
+            </div>
+          </form>
+        </footer>
+      </div>
     </div>
   );
 }
 
 const ChatSkeleton = () => (
-    <div className="flex h-full flex-col bg-card rounded-lg border shadow-sm">
+    <div className="flex h-full flex-col bg-card/80 backdrop-blur-sm rounded-lg border shadow-sm">
       <header className="border-b p-4 flex items-center">
         <Skeleton className="h-6 w-32" />
       </header>
@@ -154,7 +164,7 @@ const ChatSkeleton = () => (
       <footer className="border-t p-2 md:p-4">
         <div className="flex items-center gap-2">
             <Skeleton className="h-10 flex-1" />
-            <Skeleton className="h-10 w-10 rounded-md" />
+            <Skeleton className="h-10 w-24" />
         </div>
       </footer>
     </div>

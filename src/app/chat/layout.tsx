@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, MessageCircle, Plus, Users } from "lucide-react";
+import { LogOut, MessageSquare, Plus, Users, Menu } from "lucide-react";
 import * as React from "react";
 
 import {
@@ -39,14 +39,14 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
           <Sidebar>
             <SidebarHeader>
               <div className="flex items-center gap-2">
-                <MessageCircle className="w-8 h-8 text-primary" />
-                <h1 className="font-headline text-xl font-semibold">Chatapp</h1>
+                <MessageSquare className="w-7 h-7 text-primary" />
+                <h1 className="font-headline text-2xl font-semibold">Chatify</h1>
                 <SidebarTrigger className="ml-auto" />
               </div>
             </SidebarHeader>
             <SidebarContent>
               <SidebarGroup>
-                  <Button variant="outline" className="w-full">
+                  <Button variant="outline" className="w-full justify-start">
                       <Plus className="mr-2 h-4 w-4" />
                       Create Room
                   </Button>
@@ -59,6 +59,7 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
                       <SidebarMenuButton
                         isActive={pathname === `/chat/rooms/${room.id}`}
                         tooltip={{children: room.name, side: 'right'}}
+                        className="justify-start"
                       >
                         <Users />
                         <span>{room.name}</span>
@@ -69,13 +70,17 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
               </SidebarMenu>
             </SidebarContent>
             <SidebarFooter>
+              <Separator className="my-2" />
               <div className="flex items-center justify-between w-full p-2">
-                <div className="flex items-center gap-2 overflow-hidden">
-                    <Avatar className="h-8 w-8">
+                <div className="flex items-center gap-3 overflow-hidden">
+                    <Avatar className="h-9 w-9">
                       <AvatarImage src={currentUser.avatarUrl} alt={currentUser.name} />
                       <AvatarFallback>{currentUser.name.charAt(0)}</AvatarFallback>
                     </Avatar>
-                    <span className="font-medium truncate">{currentUser.name}</span>
+                    <div className="flex flex-col">
+                      <span className="font-medium truncate text-sm">{currentUser.name}</span>
+                      <span className="text-xs text-muted-foreground">Free Plan</span>
+                    </div>
                 </div>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -89,11 +94,18 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
             </SidebarFooter>
           </Sidebar>
           <SidebarInset>
-              <header className="p-4 border-b flex items-center md:hidden">
-                  <SidebarTrigger />
-                  <h2 className="font-headline text-xl font-semibold ml-2">Chatapp</h2>
+              <header className="p-4 border-b flex items-center justify-between md:hidden">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="w-6 h-6 text-primary" />
+                    <h2 className="font-headline text-xl font-semibold">Chatify</h2>
+                  </div>
+                  <SidebarTrigger>
+                    <Menu />
+                  </SidebarTrigger>
               </header>
-              <div className="flex-1 overflow-y-auto p-4">{children}</div>
+              <div className="flex-1 overflow-y-auto" style={{backgroundImage: "url('/background.svg')"}}>
+                {children}
+              </div>
           </SidebarInset>
         </div>
       </div>
