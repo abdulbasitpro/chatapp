@@ -13,6 +13,9 @@ export type Message = {
   senderId: string;
   userName: string;
   userAvatar: string;
+  fileUrl?: string;
+  fileName?: string;
+  fileType?: string;
 };
 
 export type Room = {

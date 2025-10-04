@@ -2,20 +2,23 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Send, Smile, Paperclip, Loader2, Trash2 } from 'lucide-react';
+import { Send, Smile, Paperclip, Loader2, Trash2, Upload } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useCollection, useDoc, useFirestore, useUser, useMemoFirebase, addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
+import { useCollection, useDoc, useFirestore, useUser, useMemoFirebase, addDocumentNonBlocking, deleteDocumentNonBlocking, useStorage } from '@/firebase';
 import { collection, doc, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { ref as storageRef, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
 import { useTheme } from 'next-themes';
+import { MessageContent } from './message-content';
+import { Progress } from '@/components/ui/progress';
 
 type Message = {
   id: string;
@@ -24,6 +27,9 @@ type Message = {
   senderId: string;
   userName: string;
   userAvatar: string;
+  fileUrl?: string;
+  fileName?: string;
+  fileType?: string;
 };
 
 export default function ChatRoomPage() {
@@ -32,6 +38,7 @@ export default function ChatRoomPage() {
   const roomId = params.roomId as string;
   const { user } = useUser();
   const firestore = useFirestore();
+  const storage = useStorage();
   const { toast } = useToast();
   const { resolvedTheme } = useTheme();
 
@@ -39,7 +46,11 @@ export default function ChatRoomPage() {
   const [messageToDelete, setMessageToDelete] = useState<Message | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEmojiPickerOpen, setEmojiPickerOpen] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const roomRef = useMemoFirebase(() => {
     if (!firestore || !roomId) return null;
@@ -72,19 +83,71 @@ export default function ChatRoomPage() {
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
-    if (newMessage.trim() === '' || !user || !roomRef) return;
-
+    if ((newMessage.trim() === '' && !uploadingFile) || !user || !roomRef) return;
+    
+    if (uploadingFile) {
+      handleFileUpload(uploadingFile);
+    } else {
+      sendMessage(newMessage);
+    }
+  
+    setNewMessage('');
+    setUploadingFile(null);
+    setEmojiPickerOpen(false);
+  };
+  
+  const sendMessage = (content: string, fileData?: { fileUrl: string, fileName: string, fileType: string }) => {
+    if(!user || !roomRef) return;
     const messagesCollection = collection(roomRef, 'messages');
     addDocumentNonBlocking(messagesCollection, {
-      content: newMessage,
+      content: content,
       timestamp: serverTimestamp(),
       senderId: user.uid,
       userName: user.displayName,
       userAvatar: `https://i.pravatar.cc/150?u=${user.uid}`,
+      ...fileData,
     });
+  }
 
-    setNewMessage('');
-    setEmojiPickerOpen(false);
+  const handleFileUpload = (file: File) => {
+    if (!file || !user || !roomId) return;
+    
+    const filePath = `chat_files/${roomId}/${Date.now()}_${file.name}`;
+    const fileStorageRef = storageRef(storage, filePath);
+    const uploadTask = uploadBytesResumable(fileStorageRef, file);
+
+    uploadTask.on('state_changed', 
+      (snapshot) => {
+        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        setUploadProgress(progress);
+      }, 
+      (error) => {
+        console.error("Upload failed:", error);
+        toast({ variant: "destructive", title: "Upload failed", description: "Could not upload your file." });
+        setUploadingFile(null);
+        setUploadProgress(0);
+      }, 
+      () => {
+        getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
+          sendMessage(newMessage, {
+            fileUrl: downloadURL,
+            fileName: file.name,
+            fileType: file.type,
+          });
+          setUploadingFile(null);
+          setUploadProgress(0);
+          setNewMessage('');
+        });
+      }
+    );
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setUploadingFile(file);
+      setNewMessage(file.name); // Show file name in input
+    }
   };
 
   const handleEmojiClick = (emojiData: EmojiClickData) => {
@@ -164,7 +227,7 @@ export default function ChatRoomPage() {
                   )}
                 >
                   {!isCurrentUser && <p className="text-xs font-bold mb-1 text-primary">{msg.userName}</p>}
-                  <p className="text-sm break-words">{msg.content}</p>
+                  <MessageContent message={msg} />
                   <p className="text-xs mt-1.5 opacity-70 text-right">{formatTimestamp(msg.timestamp)}</p>
                 </div>
                 {isCurrentUser && (
@@ -182,19 +245,26 @@ export default function ChatRoomPage() {
         </div>
       </ScrollArea>
       <footer className="border-t p-2 md:p-4 bg-background/95 backdrop-blur-sm">
+        {uploadingFile && uploadProgress > 0 && (
+          <div className="px-2 pb-2">
+            <Progress value={uploadProgress} className="w-full h-2" />
+            <p className="text-xs text-center text-muted-foreground mt-1">Uploading {uploadingFile.name}... ({Math.round(uploadProgress)}%)</p>
+          </div>
+        )}
         <form onSubmit={handleSendMessage} className="relative">
           <Input
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
-            placeholder="Type a message..."
+            placeholder={uploadingFile ? uploadingFile.name : "Type a message..."}
             autoComplete="off"
             className="pr-28 bg-background"
-            disabled={!user}
+            disabled={!user || (uploadingFile && uploadProgress > 0)}
           />
+           <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" />
           <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center">
             <Popover open={isEmojiPickerOpen} onOpenChange={setEmojiPickerOpen}>
               <PopoverTrigger asChild>
-                <Button type="button" size="icon" variant="ghost">
+                <Button type="button" size="icon" variant="ghost" disabled={!!uploadingFile}>
                   <Smile className="h-5 w-5" />
                 </Button>
               </PopoverTrigger>
@@ -205,10 +275,10 @@ export default function ChatRoomPage() {
                 />
               </PopoverContent>
             </Popover>
-            <Button type="button" size="icon" variant="ghost">
+            <Button type="button" size="icon" variant="ghost" onClick={() => fileInputRef.current?.click()} disabled={!!uploadingFile}>
               <Paperclip className="h-5 w-5" />
             </Button>
-            <Button type="submit" size="icon" variant="ghost" disabled={!newMessage.trim() || !user}>
+            <Button type="submit" size="icon" variant="ghost" disabled={(!newMessage.trim() && !uploadingFile) || !user || (uploadingFile && uploadProgress > 0 && uploadProgress < 100)}>
               <Send className="h-5 w-5 text-primary" />
               <span className="sr-only">Send</span>
             </Button>
