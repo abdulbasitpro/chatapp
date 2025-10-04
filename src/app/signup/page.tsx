@@ -54,9 +54,9 @@ export default function SignupPage() {
 
       toast({
         title: "Signup Successful",
-        description: "You can now log in.",
+        description: "Welcome to Chatify!",
       });
-      router.push('/');
+      router.push('/chat');
     } catch (error: any) {
       console.error("Signup failed:", error);
       toast({
