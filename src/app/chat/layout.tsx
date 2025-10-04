@@ -16,6 +16,7 @@ import {
   SidebarMenuButton,
   SidebarInset,
   SidebarGroup,
+  SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -39,6 +40,7 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
             <div className="flex items-center gap-2">
               <MessageCircle className="w-8 h-8 text-primary" />
               <h1 className="font-headline text-xl font-semibold">Chatapp</h1>
+              <SidebarTrigger className="ml-auto" />
             </div>
           </SidebarHeader>
           <SidebarContent>
@@ -86,6 +88,10 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
           </SidebarFooter>
         </Sidebar>
         <SidebarInset>
+            <header className="p-4 border-b flex items-center md:hidden">
+                <SidebarTrigger />
+                <h2 className="font-headline text-xl font-semibold ml-2">Chatapp</h2>
+            </header>
             {children}
         </SidebarInset>
       </div>
