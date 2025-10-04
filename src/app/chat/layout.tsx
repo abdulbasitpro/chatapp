@@ -19,6 +19,7 @@ import {
   SidebarGroup,
   SidebarMenuSkeleton,
   SidebarMenuAction,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -41,13 +42,14 @@ const createRoomSchema = z.object({
   name: z.string().min(1, "Room name is required"),
 });
 
-export default function ChatLayout({ children }: { children: React.ReactNode }) {
+
+function ChatSidebar() {
   const pathname = usePathname();
-  const router = useRouter();
-  const auth = useAuth();
-  const { user, isUserLoading } = useUser();
+  const { setOpenMobile } = useSidebar();
+  const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
+  const router = useRouter();
 
   const [isCreateRoomOpen, setCreateRoomOpen] = React.useState(false);
   const [deleteRoom, setDeleteRoom] = React.useState<WithId<Room> | null>(null);
@@ -61,12 +63,6 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
   }, [firestore]);
 
   const { data: rooms, isLoading: isLoadingRooms } = useCollection<RoomWithId>(roomsQuery);
-
-  const handleLogout = async () => {
-    if(!auth) return;
-    await signOut(auth);
-    router.push('/');
-  };
 
   const form = useForm<z.infer<typeof createRoomSchema>>({
     resolver: zodResolver(createRoomSchema),
@@ -86,41 +82,129 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
     setCreateRoomOpen(false);
     form.reset();
   };
-  
+
   const handleDeleteRoom = async () => {
-    if (!firestore || !deleteRoom || isDeleting) return;
-    
+    if (!firestore || !deleteRoom) return;
+
     setIsDeleting(true);
+    const roomRef = doc(firestore, 'rooms', deleteRoom.id);
+    const messagesRef = collection(roomRef, 'messages');
     
-    try {
-      const roomRef = doc(firestore, 'rooms', deleteRoom.id);
-      const messagesRef = collection(roomRef, 'messages');
-      
-      // Use a write batch to delete all messages and the room in one atomic operation
-      const messagesSnapshot = await getDocs(messagesRef);
-      const batch = writeBatch(firestore);
-      messagesSnapshot.forEach(doc => {
-        batch.delete(doc.ref);
-      });
-      batch.delete(roomRef); // Add room deletion to the same batch
+    const messagesSnapshot = await getDocs(messagesRef);
+    const batch = writeBatch(firestore);
+    messagesSnapshot.forEach(doc => {
+      batch.delete(doc.ref);
+    });
+    batch.delete(roomRef);
 
-      await batch.commit();
+    await batch.commit();
 
-      toast({ title: "Room deleted", description: `Room "${deleteRoom.name}" and all its messages have been deleted.` });
+    toast({ title: "Room deleted", description: `Room "${deleteRoom.name}" and all its messages have been deleted.` });
 
-      if (pathname.includes(deleteRoom.id)) {
-        router.push('/chat');
-      }
-
-    } catch (error) {
-      console.error("Error deleting room:", error);
-      toast({ variant: "destructive", title: "Error", description: "Failed to delete room. You may not have permission." });
-    } finally {
-      setIsDeleting(false);
-      setDeleteRoom(null);
+    if (pathname.includes(deleteRoom.id)) {
+      router.push('/chat');
     }
+    
+    setIsDeleting(false);
+    setDeleteRoom(null);
   };
 
+  return (
+    <>
+      <SidebarContent>
+        <div className="p-2">
+          <Button variant="default" className="w-full" onClick={() => setCreateRoomOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            New Chat Room
+          </Button>
+        </div>
+        <Separator className="my-1" />
+        <SidebarMenu>
+          {isLoadingRooms ? (
+            <>
+              <SidebarMenuSkeleton showIcon />
+              <SidebarMenuSkeleton showIcon />
+              <SidebarMenuSkeleton showIcon />
+            </>
+          ) : (
+            rooms?.map((room) => (
+              <SidebarMenuItem key={room.id}>
+                <Link
+                  href={`/chat/rooms/${room.id}`}
+                  onClick={() => setOpenMobile(false)}
+                  className={cn(
+                    "flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-none ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50",
+                    "h-8 text-sm",
+                    pathname === `/chat/rooms/${room.id}` ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground" : ""
+                  )}
+                >
+                  <Users className="text-muted-foreground" />
+                  <span>{room.name}</span>
+                </Link>
+                {user?.uid === room.creatorId && (
+                   <SidebarMenuAction
+                      onClick={() => setDeleteRoom(room)}
+                      aria-label="Delete room"
+                      showOnHover
+                   >
+                     <Trash2 />
+                   </SidebarMenuAction>
+                )}
+              </SidebarMenuItem>
+            ))
+          )}
+        </SidebarMenu>
+      </SidebarContent>
+      <Dialog open={isCreateRoomOpen} onOpenChange={setCreateRoomOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create a new room</DialogTitle>
+            <DialogDescription>Enter a name for your new chat room.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={form.handleSubmit(handleCreateRoom)} className="space-y-4">
+            <Input {...form.register("name")} placeholder="e.g., Cool Project" className="text-foreground" />
+            {form.formState.errors.name && <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>}
+            <DialogFooter>
+              <Button type="button" variant="ghost" onClick={() => setCreateRoomOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? "Creating..." : "Create"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <AlertDialog open={!!deleteRoom} onOpenChange={(open) => !open && setDeleteRoom(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the room "{deleteRoom?.name}" and all of its messages. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteRoom(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteRoom} disabled={isDeleting} className="bg-destructive hover:bg-destructive/90">
+              {isDeleting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
+
+export default function ChatLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const auth = useAuth();
+  const { user, isUserLoading } = useUser();
+  const { toast } = useToast();
+
+  const handleLogout = async () => {
+    if(!auth) return;
+    await signOut(auth);
+    router.push('/');
+  };
 
   React.useEffect(() => {
     if (!isUserLoading && !user) {
@@ -148,50 +232,7 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
                 <SidebarTrigger className="ml-auto" />
               </div>
             </SidebarHeader>
-            <SidebarContent>
-                <>
-                  <div className="p-2">
-                    <Button variant="default" className="w-full" onClick={() => setCreateRoomOpen(true)}>
-                      <Plus className="mr-2 h-4 w-4" />
-                      New Chat Room
-                    </Button>
-                  </div>
-                  <Separator className="my-1" />
-                  <SidebarMenu>
-                    {isLoadingRooms ? (
-                      <>
-                        <SidebarMenuSkeleton showIcon />
-                        <SidebarMenuSkeleton showIcon />
-                        <SidebarMenuSkeleton showIcon />
-                      </>
-                    ) : (
-                      rooms?.map((room) => (
-                        <SidebarMenuItem key={room.id}>
-                          <Link href={`/chat/rooms/${room.id}`} passHref className="flex-1">
-                            <SidebarMenuButton
-                              isActive={pathname === `/chat/rooms/${room.id}`}
-                              tooltip={{ children: room.name, side: 'right' }}
-                              className="justify-start"
-                            >
-                              <Users className="text-muted-foreground" />
-                              <span>{room.name}</span>
-                            </SidebarMenuButton>
-                          </Link>
-                          {user?.uid === room.creatorId && (
-                             <SidebarMenuAction
-                               onClick={() => setDeleteRoom(room)}
-                               aria-label="Delete room"
-                               showOnHover
-                             >
-                               <Trash2 />
-                             </SidebarMenuAction>
-                          )}
-                        </SidebarMenuItem>
-                      ))
-                    )}
-                  </SidebarMenu>
-                </>
-            </SidebarContent>
+            <ChatSidebar />
             <SidebarFooter>
               <Separator className="my-2" />
               {user && (
@@ -233,40 +274,6 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
           </div>
         </div>
       </div>
-      <Dialog open={isCreateRoomOpen} onOpenChange={setCreateRoomOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create a new room</DialogTitle>
-            <DialogDescription>Enter a name for your new chat room.</DialogDescription>
-          </DialogHeader>
-          <form onSubmit={form.handleSubmit(handleCreateRoom)} className="space-y-4">
-            <Input {...form.register("name")} placeholder="e.g., Cool Project" />
-            {form.formState.errors.name && <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>}
-            <DialogFooter>
-              <Button type="button" variant="ghost" onClick={() => setCreateRoomOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? "Creating..." : "Create"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-      <AlertDialog open={!!deleteRoom} onOpenChange={(open) => !open && setDeleteRoom(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete the room "{deleteRoom?.name}" and all of its messages. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setDeleteRoom(null)} disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteRoom} disabled={isDeleting} className="bg-destructive hover:bg-destructive/90">
-              {isDeleting ? "Deleting..." : "Delete"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </SidebarProvider>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Send, Smile, Paperclip, Loader2, Trash2, X } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -10,7 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCollection, useDoc, useFirestore, useUser, useMemoFirebase, addDocumentNonBlocking, deleteDocumentNonBlocking, useStorage } from '@/firebase';
-import { collection, doc, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, query, orderBy, serverTimestamp, limit } from 'firebase/firestore';
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
@@ -44,7 +44,6 @@ export default function ChatRoomPage() {
 
   const [newMessage, setNewMessage] = useState('');
   const [messageToDelete, setMessageToDelete] = useState<Message | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [isEmojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const [uploadingFile, setUploadingFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -60,10 +59,15 @@ export default function ChatRoomPage() {
 
   const messagesQuery = useMemoFirebase(() => {
     if (!roomRef) return null;
-    return query(collection(roomRef, 'messages'), orderBy('timestamp', 'asc'));
+    return query(collection(roomRef, 'messages'), orderBy('timestamp', 'desc'), limit(50));
   }, [roomRef]);
   const { data: messages, isLoading: isLoadingMessages } = useCollection<Message>(messagesQuery);
   
+  const sortedMessages = useMemo(() => {
+    if (!messages) return [];
+    return [...messages].sort((a, b) => a.timestamp?.toDate() - b.timestamp?.toDate());
+  }, [messages]);
+
   useEffect(() => {
     if (scrollAreaRef.current) {
       const viewport = scrollAreaRef.current.querySelector('div[data-radix-scroll-area-viewport]');
@@ -73,7 +77,7 @@ export default function ChatRoomPage() {
         }, 100);
       }
     }
-  }, [messages, isLoadingMessages]);
+  }, [sortedMessages, isLoadingMessages]);
   
   useEffect(() => {
     if (!isLoadingRoom && !room && roomError) {
@@ -174,23 +178,16 @@ export default function ChatRoomPage() {
     setNewMessage((prevMessage) => prevMessage + emojiData.emoji);
   };
 
-  const handleDeleteMessage = async () => {
-    if (!firestore || !messageToDelete || !roomRef || isDeleting) return;
+  const handleDeleteMessage = () => {
+    if (!firestore || !messageToDelete || !roomRef) return;
 
-    setIsDeleting(true);
-
-    try {
-      const messageRef = doc(firestore, 'rooms', roomId, 'messages', messageToDelete.id);
-      await deleteDocumentNonBlocking(messageRef);
-      toast({ title: "Message deleted" });
-    } catch (error) {
-      console.error("Error deleting message:", error);
-      toast({ variant: "destructive", title: "Error", description: "Failed to delete message." });
-    } finally {
-      setIsDeleting(false);
-      setMessageToDelete(null);
-    }
+    const messageRef = doc(firestore, 'rooms', roomId, 'messages', messageToDelete.id);
+    deleteDocumentNonBlocking(messageRef);
+    toast({ title: "Message deleted" });
+    
+    setMessageToDelete(null);
   };
+
 
   const formatTimestamp = (timestamp: any) => {
     if (!timestamp) return '';
@@ -211,7 +208,7 @@ export default function ChatRoomPage() {
         <div className="p-4 md:p-6 space-y-6">
           {isLoadingMessages ? (
              <div className="flex items-center justify-center pt-10"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
-          ) : messages?.map((msg) => {
+          ) : sortedMessages.map((msg) => {
             const isCurrentUser = msg.senderId === user?.uid;
             return (
               <div
@@ -315,9 +312,9 @@ export default function ChatRoomPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setMessageToDelete(null)} disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteMessage} disabled={isDeleting} className="bg-destructive hover:bg-destructive/90">
-              {isDeleting ? "Deleting..." : "Delete"}
+            <AlertDialogCancel onClick={() => setMessageToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteMessage} className="bg-destructive hover:bg-destructive/90">
+              Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
