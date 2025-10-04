@@ -98,26 +98,6 @@
         "userName",
         "userAvatar"
       ]
-    },
-    "TypingStatus": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "TypingStatus",
-      "type": "object",
-      "description": "Represents a user's typing status in a room.",
-      "properties": {
-        "userName": {
-          "type": "string",
-          "description": "The name of the user who is typing."
-        },
-        "timestamp": {
-          "type": "object",
-          "description": "Server timestamp of the last typing activity."
-        }
-      },
-      "required": [
-        "userName",
-        "timestamp"
-      ]
     }
   },
   "auth": {
@@ -143,12 +123,6 @@
         "$ref": "#/entities/Message"
       },
       "description": "Stores messages for a specific chat room."
-    },
-    "/rooms/{roomId}/typing_statuses/{userId}": {
-      "schema": {
-        "$ref": "#/entities/TypingStatus"
-      },
-      "description": "Stores the typing status of users in a room. Document ID is the user's UID."
     }
   }
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useMemo } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Send, Smile, Paperclip, Loader2, Trash2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -10,7 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCollection, useDoc, useFirestore, useUser, useMemoFirebase, addDocumentNonBlocking, deleteDocumentNonBlocking, useStorage, setDocumentNonBlocking } from '@/firebase';
-import { collection, doc, query, orderBy, serverTimestamp, where, Timestamp } from 'firebase/firestore';
+import { collection, doc, query, orderBy, serverTimestamp } from 'firebase/firestore';
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
@@ -32,12 +32,6 @@ type Message = {
   fileType?: string;
 };
 
-type TypingStatus = {
-  id: string;
-  userName: string;
-  timestamp: Timestamp;
-}
-
 export default function ChatRoomPage() {
   const params = useParams();
   const router = useRouter();
@@ -57,7 +51,6 @@ export default function ChatRoomPage() {
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
 
   const roomRef = useMemoFirebase(() => {
@@ -72,18 +65,6 @@ export default function ChatRoomPage() {
   }, [roomRef]);
   const { data: messages, isLoading: isLoadingMessages } = useCollection<Message>(messagesQuery);
   
-  const typingStatusesQuery = useMemoFirebase(() => {
-    if (!roomRef) return null;
-    const tenSecondsAgo = Timestamp.fromMillis(Date.now() - 10000);
-    return query(collection(roomRef, 'typing_statuses'), where('timestamp', '>', tenSecondsAgo));
-  }, [roomRef]);
-
-  const { data: typingStatuses } = useCollection<TypingStatus>(typingStatusesQuery);
-
-  const typingUsers = useMemo(() => {
-    return typingStatuses?.filter(status => status.id !== user?.uid).map(status => status.userName) || [];
-  }, [typingStatuses, user?.uid]);
-
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -94,65 +75,25 @@ export default function ChatRoomPage() {
         }, 100);
       }
     }
-  }, [messages, isLoadingMessages, typingUsers]);
+  }, [messages, isLoadingMessages]);
 
   useEffect(() => {
-    if (!isLoadingRoom && !room && !roomError) {
+    if (!isLoadingRoom && !room && roomError) {
+      // If there's an error (like permission denied), it doesn't mean the room doesn't exist.
+      // Only redirect if we have fully loaded and confirmed the room is null without an error.
       router.replace('/chat');
     }
   }, [isLoadingRoom, room, roomError, router]);
 
-  const updateTypingStatus = () => {
-    if (!user || !roomRef) return;
-    const typingStatusRef = doc(roomRef, 'typing_statuses', user.uid);
-    setDocumentNonBlocking(typingStatusRef, {
-      userName: user.displayName,
-      timestamp: serverTimestamp(),
-    }, {});
-  };
-
-  const removeTypingStatus = () => {
-    if (!user || !roomRef) return;
-    const typingStatusRef = doc(roomRef, 'typing_statuses', user.uid);
-    deleteDocumentNonBlocking(typingStatusRef);
-  };
-
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setNewMessage(e.target.value);
-    
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
-    
-    updateTypingStatus();
-
-    typingTimeoutRef.current = setTimeout(() => {
-       removeTypingStatus();
-    }, 3000); // User is considered to have stopped typing after 3 seconds
   };
-
-  useEffect(() => {
-    return () => {
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-      if(user && roomRef){
-        removeTypingStatus();
-      }
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, roomRef]);
 
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if ((newMessage.trim() === '' && !uploadingFile) || !user || !roomRef) return;
 
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
-    removeTypingStatus();
-    
     if (uploadingFile) {
       handleFileUpload(uploadingFile);
     } else {
@@ -251,7 +192,7 @@ export default function ChatRoomPage() {
     return <ChatSkeleton />;
   }
 
-  if (roomError || !room) {
+  if (!room) {
     return <div className="flex h-full items-center justify-center text-destructive">Error loading room. It may not exist or you may not have permission to view it.</div>;
   }
 
@@ -319,9 +260,6 @@ export default function ChatRoomPage() {
       </ScrollArea>
        <footer className="border-t p-2 md:p-4 bg-background/95 backdrop-blur-sm">
         <div className="h-6 px-2 text-xs text-muted-foreground">
-          {typingUsers.length > 0 &&
-            `${typingUsers.join(', ')} ${typingUsers.length === 1 ? 'is' : 'are'} typing...`
-          }
         </div>
         {uploadingFile && uploadProgress > 0 && uploadProgress < 100 && (
           <div className="px-2 pb-2">
@@ -400,5 +338,3 @@ const ChatSkeleton = () => (
     </footer>
   </div>
 );
-
-    
