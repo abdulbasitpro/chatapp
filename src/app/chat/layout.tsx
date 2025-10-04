@@ -16,20 +16,21 @@ import {
   SidebarMenuButton,
   SidebarTrigger,
   SidebarGroup,
+  SidebarMenuSkeleton,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
-import { useAuth, useUser, useCollection, useFirestore, useMemoFirebase, useDoc } from "@/firebase";
+import { useAuth, useUser, useCollection, useFirestore, useMemoFirebase } from "@/firebase";
 import { signOut } from "firebase/auth";
-import { collection, query, orderBy, where, doc } from "firebase/firestore";
+import { collection, query, orderBy, doc } from "firebase/firestore";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { addDocumentNonBlocking } from "@/firebase";
+import { addDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 import { useToast } from "@/hooks/use-toast";
 
 const createRoomSchema = z.object({
@@ -53,13 +54,8 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
 
   const { data: rooms, isLoading: isLoadingRooms } = useCollection<{ name: string }>(roomsQuery);
 
-  const userRef = useMemoFirebase(() => {
-    if(!firestore || !user) return null;
-    return doc(firestore, 'users', user.uid);
-  }, [firestore, user]);
-  const {data: currentUser, isLoading: isLoadingCurrentUserData} = useDoc<{name: string, avatarUrl: string}>(userRef);
-
   const handleLogout = async () => {
+    if(!auth) return;
     await signOut(auth);
     router.push('/');
   };
@@ -71,20 +67,16 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
     },
   });
 
-  const handleCreateRoom = async (values: z.infer<typeof createRoomSchema>) => {
-    if (!user) return;
+  const handleCreateRoom = (values: z.infer<typeof createRoomSchema>) => {
+    if (!user || !firestore) return;
     const roomsCollection = collection(firestore, "rooms");
-    try {
-      await addDocumentNonBlocking(roomsCollection, {
-        name: values.name,
-        creatorId: user.uid,
-      });
-      toast({ title: "Room created!" });
-      setCreateRoomOpen(false);
-      form.reset();
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Failed to create room", description: error.message });
-    }
+    addDocumentNonBlocking(roomsCollection, {
+      name: values.name,
+      creatorId: user.uid,
+    });
+    toast({ title: "Room created!" });
+    setCreateRoomOpen(false);
+    form.reset();
   };
 
   React.useEffect(() => {
@@ -93,7 +85,7 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
     }
   }, [user, isUserLoading, router]);
 
-  if (isUserLoading || !user || isLoadingCurrentUserData) {
+  if (isUserLoading || !user) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -148,15 +140,15 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
             </SidebarContent>
             <SidebarFooter>
               <Separator className="my-2" />
-              {currentUser && (
+              {user && (
                 <div className="flex items-center justify-between w-full p-2">
                   <div className="flex items-center gap-3 overflow-hidden">
                     <Avatar className="h-9 w-9">
-                      <AvatarImage src={currentUser.avatarUrl} alt={currentUser.name} />
-                      <AvatarFallback>{currentUser.name.charAt(0)}</AvatarFallback>
+                      <AvatarImage src={`https://i.pravatar.cc/150?u=${user.uid}`} alt={user.displayName || user.email || ''} />
+                      <AvatarFallback>{user.displayName?.charAt(0) || user.email?.charAt(0)}</AvatarFallback>
                     </Avatar>
                     <div className="flex flex-col">
-                      <span className="font-medium truncate text-sm">{currentUser.name}</span>
+                      <span className="font-medium truncate text-sm">{user.displayName || user.email}</span>
                       <span className="text-xs text-muted-foreground">Free Plan</span>
                     </div>
                   </div>
