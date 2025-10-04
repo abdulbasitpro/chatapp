@@ -13,6 +13,9 @@ import { useCollection, useDoc, useFirestore, useUser, useMemoFirebase, addDocum
 import { collection, doc, query, orderBy, serverTimestamp } from 'firebase/firestore';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
+import { useTheme } from 'next-themes';
 
 type Message = {
   id: string;
@@ -30,10 +33,12 @@ export default function ChatRoomPage() {
   const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
+  const { resolvedTheme } = useTheme();
 
   const [newMessage, setNewMessage] = useState('');
   const [messageToDelete, setMessageToDelete] = useState<Message | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isEmojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   const roomRef = useMemoFirebase(() => {
@@ -79,6 +84,11 @@ export default function ChatRoomPage() {
     });
 
     setNewMessage('');
+    setEmojiPickerOpen(false);
+  };
+
+  const handleEmojiClick = (emojiData: EmojiClickData) => {
+    setNewMessage((prevMessage) => prevMessage + emojiData.emoji);
   };
 
   const handleDeleteMessage = async () => {
@@ -182,9 +192,19 @@ export default function ChatRoomPage() {
             disabled={!user}
           />
           <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center">
-            <Button type="button" size="icon" variant="ghost">
-              <Smile className="h-5 w-5" />
-            </Button>
+            <Popover open={isEmojiPickerOpen} onOpenChange={setEmojiPickerOpen}>
+              <PopoverTrigger asChild>
+                <Button type="button" size="icon" variant="ghost">
+                  <Smile className="h-5 w-5" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0 border-0">
+                <EmojiPicker
+                  onEmojiClick={handleEmojiClick}
+                  theme={resolvedTheme === 'dark' ? 'dark' : 'light'}
+                />
+              </PopoverContent>
+            </Popover>
             <Button type="button" size="icon" variant="ghost">
               <Paperclip className="h-5 w-5" />
             </Button>
