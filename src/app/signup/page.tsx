@@ -41,6 +41,7 @@ export default function SignupPage() {
       const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
       const user = userCredential.user;
       
+      // Ensure displayName is set before proceeding
       await updateProfile(user, { displayName: values.name });
 
       const userDocRef = doc(firestore, "users", user.uid);
@@ -52,13 +53,19 @@ export default function SignupPage() {
         avatarUrl: `https://i.pravatar.cc/150?u=${user.uid}`
       };
 
+      // This operation can happen in the background
       setDocumentNonBlocking(userDocRef, userData, { merge: true });
 
       toast({
         title: "Signup Successful",
         description: "Welcome to Chatify!",
       });
+
+      // Manually reload the user object to get the updated displayName
+      await user.reload();
+      
       router.push('/chat');
+
     } catch (error: any) {
       console.error("Signup failed:", error);
       toast({
