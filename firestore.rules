@@ -3,108 +3,108 @@
  *
  * Core Philosophy:
  * This ruleset enforces a strict user-ownership model for user data and room creation,
- * and allows public read access to rooms and their messages. Only the creator of a room
- * can modify or delete it. Messages can be created by any authenticated user within
- * a room, but only the sender can delete their own messages.
+ * while allowing public read access to rooms. Messages within rooms are restricted to
+ * authenticated users.
  *
  * Data Structure:
- * - /users/{userId}: Stores private user data, accessible only by the user.
- * - /rooms/{roomId}: Stores chat room metadata, readable by anyone, but only modifiable
- *   by the creator.
- * - /rooms/{roomId}/messages/{messageId}: Stores individual messages within a room, readable
- *   by anyone, but only deletable by the message sender.
+ * - /users/{userId}: Stores individual user profiles, accessible only to the owning user.
+ * - /rooms/{roomId}: Stores chat room metadata, with 'creatorId' denormalized for efficient
+ *   ownership checks.
+ * - /rooms/{roomId}/messages/{messageId}: Stores messages within each chat room.
  *
  * Key Security Decisions:
- * - User listing is disallowed to protect user privacy.
- * - Rooms are publicly readable to facilitate discovery and participation.
- * - The 'creatorId' field is denormalized into the Room document for efficient
- *   authorization checks, avoiding costly 'get()' calls.
+ * - Users can only read and write their own user documents.
+ * - Room creation is restricted to authenticated users, with the 'creatorId' field
+ *   validated against the user's UID.
+ * - Only the room creator can delete a room.
+ * - Message creation is restricted to authenticated users within a specific room.
+ * - Listing of users is disallowed for privacy.
  *
  * Denormalization for Authorization:
- * - The 'creatorId' field is stored directly within the Room document. This allows rules
- *   to quickly verify ownership without needing additional reads.
+ * - The 'Room' document includes a 'creatorId' field, which duplicates the user ID
+ *   of the room creator. This denormalization is crucial for security rule efficiency.
+ *   It enables direct authorization checks on 'Room' documents without needing to
+ *   perform additional 'get()' operations to fetch user data.
  *
  * Structural Segregation:
- * - Private user data is stored under the /users/{userId} path, separate from public
- *   room and message data.
+ * - Public and private data are stored in separate collections. User profiles are stored
+ *   in the private '/users/{userId}' collection, while chat room metadata is stored in
+ *   the public '/rooms/{roomId}' collection.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Checks if the request is authenticated.
-     * @return {bool} True if the request is authenticated, false otherwise.
-     */
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    /**
-     * @description Checks if the authenticated user is the owner of the document.
-     * @param {string} userId - The user ID to compare against the request's auth UID.
-     * @return {bool} True if the authenticated user's UID matches the provided userId, false otherwise.
-     */
-    function isOwner(userId) {
-      return request.auth.uid == userId;
-    }
-
-    /**
-     * @description Checks if the authenticated user is the owner of an existing document.
-     * @param {string} userId - The user ID to compare against the request's auth UID.
-     * @return {bool} True if the authenticated user's UID matches the provided userId and the resource exists, false otherwise.
-     */
-    function isExistingOwner(userId) {
-        return isOwner(userId) && resource != null;
-    }
-
-    /**
-     * @description Defines rules for user documents.
+     * @description Enforces user-level access control for user profiles.
      * @path /users/{userId}
      * @allow (create) - Authenticated user creates their own profile.
-     * @allow (get, update, delete) - Only the authenticated user can access their own profile.
-     * @deny (list) - Listing all users is not allowed.
-     * @deny (create) - Creating a profile with a mismatched user ID.
-     * @principle Enforces document ownership for user data.
+     * @allow (get, update, delete) - Authenticated user accesses their own profile.
+     * @deny (create, get, update, delete) - Any other user attempts to access this profile.
+     * @principle Enforces document ownership for writes and restricts access to a user's own data tree.
      */
     match /users/{userId} {
+      function isOwner(userId) {
+        return request.auth != null && request.auth.uid == userId;
+      }
+
+      function isExistingOwner(userId) {
+        return isOwner(userId) && resource != null;
+      }
+
+      allow create: if isOwner(userId) && request.resource.data.id == request.auth.uid;
       allow get: if isOwner(userId);
       allow list: if false;
-      allow create: if isOwner(userId);
-      allow update: if isExistingOwner(userId);
+      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
       allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Defines rules for room documents.
+     * @description Manages access control for chat rooms.
      * @path /rooms/{roomId}
-     * @allow (get, list) - Any user can read room information.
-     * @allow (create) - Any authenticated user can create a room, with creatorId matching their UID.
-     * @allow (update, delete) - Only the creator of the room can update or delete it.
-     * @deny (create) - Creating a room with a mismatched creatorId.
-     * @principle Enforces creator ownership for room management.
+     * @allow (create) - Authenticated user creates a new room and their UID is equal to creatorId.
+     * @allow (get, list) - Anyone can view the list of chat rooms (public read).
+     * @allow (update) - No one can update the rooms.
+     * @allow (delete) - Only the room creator can delete the room.
+     * @deny (create) - User tries to create a room with a creatorId that doesn't match their UID.
+     * @principle Public read, owner-only writes with creatorId validation.
      */
     match /rooms/{roomId} {
-      allow get, list: if true;
+      function isSignedIn() {
+        return request.auth != null;
+      }
+
+      function isOwner(creatorId) {
+          return request.auth.uid == creatorId;
+      }
+
+      function isExistingOwner(creatorId) {
+        return isOwner(creatorId) && resource != null;
+      }
+
       allow create: if isSignedIn() && request.resource.data.creatorId == request.auth.uid;
-      allow update: if isSignedIn() && resource.data.creatorId == request.auth.uid;
-      allow delete: if isSignedIn() && resource.data.creatorId == request.auth.uid;
+      allow get, list: if true;
+      allow update: if false;
+      allow delete: if isExistingOwner(resource.data.creatorId);
     }
 
     /**
-     * @description Defines rules for message documents within a room.
+     * @description Manages access control for messages within a chat room.
      * @path /rooms/{roomId}/messages/{messageId}
-     * @allow (get, list) - Any user can read messages within a room.
-     * @allow (create) - Any authenticated user can create a message within a room, with senderId matching their UID.
-     * @allow (delete) - Only the sender of the message can delete it.
-     * @deny (create) - Creating a message with a mismatched senderId.
-     * @principle Enforces sender ownership for message deletion.
+     * @allow (create) - Authenticated user creates a message in a room.
+     * @allow (get, list) - Any authenticated user can read messages in a room.
+     * @allow (update, delete) - No one can update or delete messages (immutable).
+     * @deny (create) - Anonymous user tries to create a message.
+     * @principle Authenticated users can read and create messages within rooms; messages are immutable.
      */
     match /rooms/{roomId}/messages/{messageId} {
-      allow get, list: if true;
-      allow create: if isSignedIn() && request.resource.data.senderId == request.auth.uid;
-      allow update: if false;
-      allow delete: if isSignedIn() && resource.data.senderId == request.auth.uid;
+      function isSignedIn() {
+        return request.auth != null;
+      }
+
+      allow create: if isSignedIn();
+      allow get, list: if isSignedIn();
+      allow update, delete: if false;
     }
   }
 }
