@@ -1,20 +1,71 @@
 'use client';
 
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/firebase';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import Link from 'next/link';
+import { useEffect } from 'react';
+import { useUser } from '@/firebase';
+
+const loginSchema = z.object({
+  email: z.string().email({ message: "Please enter a valid email." }),
+  password: z.string().min(1, { message: "Password is required." }),
+});
 
 export default function LoginPage() {
   const router = useRouter();
+  const { toast } = useToast();
+  const auth = useAuth();
+  const { user, isUserLoading } = useUser();
 
-  const handleLogin = (event: React.FormEvent) => {
-    event.preventDefault();
-    router.push('/chat');
+  const form = useForm<z.infer<typeof loginSchema>>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: "",
+      password: "",
+    },
+  });
+
+  useEffect(() => {
+    if (!isUserLoading && user) {
+      router.push('/chat');
+    }
+  }, [user, isUserLoading, router]);
+
+  const handleLogin = async (values: z.infer<typeof loginSchema>) => {
+    try {
+      await signInWithEmailAndPassword(auth, values.email, values.password);
+      router.push('/chat');
+    } catch (error: any) {
+      console.error("Login failed:", error);
+      toast({
+        variant: "destructive",
+        title: "Login Failed",
+        description: error.message || "An unexpected error occurred.",
+      });
+    }
   };
+
+  if (isUserLoading || user) {
+    return (
+        <main className="flex min-h-screen flex-col items-center justify-center p-4 bg-background">
+            <div className="text-center">
+                <MessageSquare className="mx-auto h-16 w-16 animate-pulse text-primary" />
+                <p className="mt-4 text-muted-foreground">Loading...</p>
+            </div>
+        </main>
+    );
+  }
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-4 bg-background">
@@ -28,19 +79,40 @@ export default function LoginPage() {
             <CardDescription>Enter your credentials to start chatting.</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleLogin} className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" placeholder="name@example.com" required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input id="password" type="password" required />
-              </div>
-              <Button type="submit" className="w-full" variant="default">
-                Login <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </form>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(handleLogin)} className="space-y-6">
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input type="email" placeholder="name@example.com" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Password</FormLabel>
+                      <FormControl>
+                        <Input type="password" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <Button type="submit" className="w-full" variant="default" disabled={form.formState.isSubmitting}>
+                  {form.formState.isSubmitting ? "Logging in..." : "Login"}
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </form>
+            </Form>
             <div className="mt-6 text-center text-sm">
               Don't have an account?{' '}
               <Link href="/signup" className="underline text-primary font-medium">

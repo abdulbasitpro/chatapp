@@ -1,0 +1,119 @@
+{
+  "entities": {
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user in the chat application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the user entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The user's display name."
+        },
+        "email": {
+          "type": "string",
+          "description": "The user's email address.",
+          "format": "email"
+        },
+        "avatarUrl": {
+          "type": "string",
+          "description": "URL to the user's avatar image.",
+          "format": "uri"
+        }
+      },
+      "required": [
+        "id",
+        "email",
+        "name"
+      ]
+    },
+    "Room": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Room",
+      "type": "object",
+      "description": "Represents a chat room.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the room entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the chat room."
+        },
+        "creatorId": {
+          "type": "string",
+          "description": "Reference to the User who created the room."
+        }
+      },
+      "required": [
+        "name",
+        "creatorId"
+      ]
+    },
+    "Message": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Message",
+      "type": "object",
+      "description": "Represents a message sent in a chat room.",
+      "properties": {
+        "content": {
+          "type": "string",
+          "description": "The content of the message."
+        },
+        "timestamp": {
+          "type": "object",
+          "description": "The server timestamp of when the message was sent."
+        },
+        "senderId": {
+          "type": "string",
+          "description": "Reference to the User who sent the message."
+        },
+        "userName": {
+          "type": "string",
+          "description": "The name of the user who sent the message."
+        },
+        "userAvatar": {
+          "type": "string",
+          "description": "URL to the avatar of the user who sent the message."
+        }
+      },
+      "required": [
+        "content",
+        "timestamp",
+        "senderId",
+        "userName",
+        "userAvatar"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password"
+    ]
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/User"
+      },
+      "description": "Stores user profile information."
+    },
+    "/rooms/{roomId}": {
+      "schema": {
+        "$ref": "#/entities/Room"
+      },
+      "description": "Stores chat room information."
+    },
+    "/rooms/{roomId}/messages/{messageId}": {
+      "schema": {
+        "$ref": "#/entities/Message"
+      },
+      "description": "Stores messages for a specific chat room."
+    }
+  }
+}

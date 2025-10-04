@@ -6,14 +6,65 @@ import { ArrowRight, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth, useFirestore, setDocumentNonBlocking } from '@/firebase';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { doc } from 'firebase/firestore';
+
+const signupSchema = z.object({
+  name: z.string().min(1, { message: "Name is required." }),
+  email: z.string().email({ message: "Please enter a valid email." }),
+  password: z.string().min(6, { message: "Password must be at least 6 characters." }),
+});
 
 export default function SignupPage() {
   const router = useRouter();
+  const { toast } = useToast();
+  const auth = useAuth();
+  const firestore = useFirestore();
 
-  const handleSignup = (event: React.FormEvent) => {
-    event.preventDefault();
-    router.push('/chat');
+  const form = useForm<z.infer<typeof signupSchema>>({
+    resolver: zodResolver(signupSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      password: "",
+    },
+  });
+
+  const handleSignup = async (values: z.infer<typeof signupSchema>) => {
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
+      const user = userCredential.user;
+
+      const userDocRef = doc(firestore, "users", user.uid);
+      
+      const userData = {
+        id: user.uid,
+        name: values.name,
+        email: values.email,
+        avatarUrl: `https://i.pravatar.cc/150?u=${user.uid}`
+      };
+
+      setDocumentNonBlocking(userDocRef, userData, { merge: true });
+
+      toast({
+        title: "Signup Successful",
+        description: "You can now log in.",
+      });
+      router.push('/');
+    } catch (error: any) {
+      console.error("Signup failed:", error);
+      toast({
+        variant: "destructive",
+        title: "Signup Failed",
+        description: error.message || "An unexpected error occurred.",
+      });
+    }
   };
 
   return (
@@ -28,23 +79,53 @@ export default function SignupPage() {
             <CardDescription>Join Chatify and connect with others.</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSignup} className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="name">Name</Label>
-                <Input id="name" type="text" placeholder="Your Name" required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" placeholder="name@example.com" required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input id="password" type="password" required />
-              </div>
-              <Button type="submit" className="w-full" variant="default">
-                Sign Up <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </form>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(handleSignup)} className="space-y-6">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Name</FormLabel>
+                      <FormControl>
+                        <Input type="text" placeholder="Your Name" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input type="email" placeholder="name@example.com" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Password</FormLabel>
+                      <FormControl>
+                        <Input type="password" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <Button type="submit" className="w-full" variant="default" disabled={form.formState.isSubmitting}>
+                  {form.formState.isSubmitting ? "Signing up..." : "Sign Up"}
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </form>
+            </Form>
             <div className="mt-6 text-center text-sm">
               Already have an account?{' '}
               <Link href="/" className="underline text-primary font-medium">
