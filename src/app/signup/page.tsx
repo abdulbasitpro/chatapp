@@ -17,9 +17,9 @@ export default function SignupPage() {
   };
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-4" style={{backgroundImage: "url('/background.svg')"}}>
+    <main className="flex min-h-screen flex-col items-center justify-center p-4 bg-background">
       <div className="w-full max-w-md">
-        <Card className="shadow-lg bg-card/80 backdrop-blur-sm">
+        <Card className="shadow-lg">
           <CardHeader className="text-center">
             <div className="flex justify-center items-center mb-4">
               <MessageSquare className="h-12 w-12 text-primary" />
