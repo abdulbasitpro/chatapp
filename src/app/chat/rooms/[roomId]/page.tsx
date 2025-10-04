@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useMemo } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Send, Smile, Paperclip, Loader2, Trash2, X } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -10,7 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCollection, useDoc, useFirestore, useUser, useMemoFirebase, addDocumentNonBlocking, deleteDocumentNonBlocking, useStorage } from '@/firebase';
-import { collection, doc, query, orderBy, serverTimestamp, setDoc, deleteDoc, Timestamp } from 'firebase/firestore';
+import { collection, doc, query, orderBy, serverTimestamp } from 'firebase/firestore';
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
@@ -74,18 +74,16 @@ export default function ChatRoomPage() {
       }
     }
   }, [messages, isLoadingMessages]);
-
+  
   useEffect(() => {
-    if (roomError) {
-      // This might be too aggressive. Let's check isLoading before redirecting.
-      if (!isLoadingRoom) {
-        toast({
-          variant: "destructive",
-          title: "Error loading room",
-          description: "You may not have permission or the room may not exist.",
-        });
-        router.replace('/chat');
-      }
+    // Only act when loading is complete and an error exists.
+    if (!isLoadingRoom && roomError) {
+      toast({
+        variant: "destructive",
+        title: "Error loading room",
+        description: "You may not have permission or the room may not exist.",
+      });
+      router.replace('/chat');
     }
   }, [roomError, isLoadingRoom, router, toast]);
 
@@ -204,10 +202,10 @@ export default function ChatRoomPage() {
     return <ChatSkeleton />;
   }
   
-  // Only check for room existence after loading is complete
-  if (!isLoadingRoom && !room) {
-    // router.replace('/chat') is already handled by the useEffect for roomError
-    // so we can just return a skeleton or null.
+  // This check now correctly runs only after loading is complete.
+  // If there's no room data and no loading in progress, it means the room
+  // was not found or is inaccessible. The useEffect for `roomError` will handle the redirect.
+  if (!room) {
     return <ChatSkeleton />;
   }
 
@@ -353,5 +351,3 @@ const ChatSkeleton = () => (
     </footer>
   </div>
 );
-
-    
