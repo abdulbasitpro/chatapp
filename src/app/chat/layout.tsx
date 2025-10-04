@@ -37,6 +37,7 @@ import { z } from "zod";
 import { addDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 import { useToast } from "@/hooks/use-toast";
 import { Room } from "@/lib/data";
+import { cn } from "@/lib/utils";
 
 const createRoomSchema = z.object({
   name: z.string().min(1, "Room name is required"),
@@ -135,17 +136,22 @@ function ChatSidebar() {
           ) : (
             rooms?.map((room) => (
               <SidebarMenuItem key={room.id}>
-                <Link href={`/chat/rooms/${room.id}`} className="flex-1">
-                  <SidebarMenuButton
-                    isActive={pathname === `/chat/rooms/${room.id}`}
-                    tooltip={{ children: room.name, side: 'right' }}
-                    className="justify-start"
-                    onClick={() => setOpenMobile(false)}
-                  >
-                    <Users className="text-muted-foreground" />
-                    <span>{room.name}</span>
-                  </SidebarMenuButton>
-                </Link>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Link
+                      href={`/chat/rooms/${room.id}`}
+                      onClick={() => setOpenMobile(false)}
+                      className={cn(
+                        "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-none ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:!p-2 [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 h-8 justify-start",
+                        pathname === `/chat/rooms/${room.id}` && "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+                      )}
+                    >
+                      <Users className="text-muted-foreground" />
+                      <span>{room.name}</span>
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" align="center">{room.name}</TooltipContent>
+                </Tooltip>
                 {user?.uid === room.creatorId && (
                    <SidebarMenuAction
                       onClick={() => setDeleteRoom(room)}
@@ -287,3 +293,4 @@ type WithId<T> = T & { id: string };
     
 
     
+
