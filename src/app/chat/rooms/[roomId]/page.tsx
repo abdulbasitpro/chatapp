@@ -68,7 +68,7 @@ export default function ChatRoomPage() {
   }
 
   return (
-    <div className="flex h-full flex-col bg-card rounded-lg border shadow-sm">
+    <div className="flex h-full max-h-full flex-col bg-card rounded-lg border shadow-sm">
       <header className="border-b p-4 flex items-center">
         <h2 className="font-headline text-xl font-semibold">{room.name}</h2>
       </header>
