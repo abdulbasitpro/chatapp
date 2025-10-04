@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, MessageSquare, Plus, Users, Menu, Loader2 } from "lucide-react";
+import { LogOut, MessageSquare, Plus, Users, Menu, Loader2, Trash2 } from "lucide-react";
 import * as React from "react";
 
 import {
@@ -17,21 +17,24 @@ import {
   SidebarTrigger,
   SidebarGroup,
   SidebarMenuSkeleton,
+  SidebarMenuAction,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
-import { useAuth, useUser, useCollection, useFirestore, useMemoFirebase } from "@/firebase";
+import { useAuth, useUser, useCollection, useFirestore, useMemoFirebase, deleteDocumentNonBlocking } from "@/firebase";
 import { signOut } from "firebase/auth";
-import { collection, query, orderBy, doc } from "firebase/firestore";
+import { collection, query, orderBy, doc, getDocs, writeBatch } from "firebase/firestore";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { addDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 import { useToast } from "@/hooks/use-toast";
+import { Room } from "@/lib/data";
 
 const createRoomSchema = z.object({
   name: z.string().min(1, "Room name is required"),
@@ -46,13 +49,17 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
   const { toast } = useToast();
 
   const [isCreateRoomOpen, setCreateRoomOpen] = React.useState(false);
+  const [deleteRoom, setDeleteRoom] = React.useState<WithId<Room> | null>(null);
+  const [isDeleting, setIsDeleting] = React.useState(false);
+
+  type RoomWithId = Room & { id: string };
 
   const roomsQuery = useMemoFirebase(() => {
     if (!firestore) return null;
     return query(collection(firestore, "rooms"), orderBy("name"));
   }, [firestore]);
 
-  const { data: rooms, isLoading: isLoadingRooms } = useCollection<{ name: string }>(roomsQuery);
+  const { data: rooms, isLoading: isLoadingRooms } = useCollection<RoomWithId>(roomsQuery);
 
   const handleLogout = async () => {
     if(!auth) return;
@@ -78,6 +85,42 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
     setCreateRoomOpen(false);
     form.reset();
   };
+  
+  const handleDeleteRoom = async () => {
+    if (!firestore || !deleteRoom || isDeleting) return;
+    
+    setIsDeleting(true);
+    
+    try {
+      const roomRef = doc(firestore, 'rooms', deleteRoom.id);
+      const messagesRef = collection(roomRef, 'messages');
+      
+      // Delete all messages in the subcollection
+      const messagesSnapshot = await getDocs(messagesRef);
+      const batch = writeBatch(firestore);
+      messagesSnapshot.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      await batch.commit();
+
+      // Delete the room itself
+      deleteDocumentNonBlocking(roomRef);
+
+      toast({ title: "Room deleted", description: `Room "${deleteRoom.name}" and all its messages have been deleted.` });
+
+      if (pathname === `/chat/rooms/${deleteRoom.id}`) {
+        router.push('/chat');
+      }
+
+    } catch (error) {
+      console.error("Error deleting room:", error);
+      toast({ variant: "destructive", title: "Error", description: "Failed to delete room." });
+    } finally {
+      setIsDeleting(false);
+      setDeleteRoom(null);
+    }
+  };
+
 
   React.useEffect(() => {
     if (!isUserLoading && !user) {
@@ -123,7 +166,7 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
                 ) : (
                   rooms?.map((room) => (
                     <SidebarMenuItem key={room.id}>
-                      <Link href={`/chat/rooms/${room.id}`} passHref>
+                      <Link href={`/chat/rooms/${room.id}`} passHref className="flex-1">
                         <SidebarMenuButton
                           isActive={pathname === `/chat/rooms/${room.id}`}
                           tooltip={{ children: room.name, side: 'right' }}
@@ -133,6 +176,15 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
                           <span>{room.name}</span>
                         </SidebarMenuButton>
                       </Link>
+                      {user?.uid === room.creatorId && (
+                         <SidebarMenuAction
+                           onClick={() => setDeleteRoom(room)}
+                           aria-label="Delete room"
+                           showOnHover
+                         >
+                           <Trash2 />
+                         </SidebarMenuAction>
+                      )}
                     </SidebarMenuItem>
                   ))
                 )}
@@ -198,6 +250,27 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
           </form>
         </DialogContent>
       </Dialog>
+      <AlertDialog open={!!deleteRoom} onOpenChange={(open) => !open && setDeleteRoom(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the room "{deleteRoom?.name}" and all of its messages. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteRoom(null)} disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteRoom} disabled={isDeleting} className="bg-destructive hover:bg-destructive/90">
+              {isDeleting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </SidebarProvider>
   );
 }
+
+// Helper type for useCollection
+type WithId<T> = T & { id: string };
+
+    

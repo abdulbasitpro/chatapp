@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { Send, Smile, Paperclip, Loader2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,7 @@ type Message = {
 
 export default function ChatRoomPage() {
   const params = useParams();
+  const router = useRouter();
   const roomId = params.roomId as string;
   const { user } = useUser();
   const firestore = useFirestore();
@@ -53,23 +54,24 @@ export default function ChatRoomPage() {
     }
   }, [messages, isLoadingMessages]);
 
-  const userRef = useMemoFirebase(() => {
-    if(!firestore || !user) return null;
-    return doc(firestore, 'users', user.uid);
-  }, [firestore, user]);
-  const {data: currentUserData} = useDoc(userRef);
+  useEffect(() => {
+    if (!isLoadingRoom && !room) {
+      // If room doesn't exist (e.g., it was deleted), redirect.
+      router.replace('/chat');
+    }
+  }, [isLoadingRoom, room, router]);
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
-    if (newMessage.trim() === '' || !user || !roomRef || !currentUserData) return;
+    if (newMessage.trim() === '' || !user || !roomRef) return;
 
     const messagesCollection = collection(roomRef, 'messages');
     addDocumentNonBlocking(messagesCollection, {
       content: newMessage,
       timestamp: serverTimestamp(),
       senderId: user.uid,
-      userName: currentUserData.name,
-      userAvatar: currentUserData.avatarUrl,
+      userName: user.displayName,
+      userAvatar: `https://i.pravatar.cc/150?u=${user.uid}`,
     });
 
     setNewMessage('');
@@ -81,12 +83,8 @@ export default function ChatRoomPage() {
     return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
   
-  if (isLoadingRoom || isLoadingMessages) {
+  if (isLoadingRoom || !room) {
     return <ChatSkeleton />;
-  }
-
-  if (!room) {
-    return <div className="text-center p-4">Room not found. Select a room to start.</div>;
   }
 
   return (
@@ -96,7 +94,9 @@ export default function ChatRoomPage() {
       </header>
       <ScrollArea className="flex-1" ref={scrollAreaRef}>
         <div className="p-4 md:p-6 space-y-6">
-          {messages?.map((msg) => {
+          {isLoadingMessages ? (
+             <div className="flex items-center justify-center pt-10"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+          ) : messages?.map((msg) => {
             const isCurrentUser = msg.senderId === user?.uid;
             return (
               <div
@@ -109,7 +109,7 @@ export default function ChatRoomPage() {
                 {!isCurrentUser && (
                   <Avatar className="h-8 w-8">
                     <AvatarImage src={msg.userAvatar} alt={msg.userName} />
-                    <AvatarFallback>{msg.userName.charAt(0)}</AvatarFallback>
+                    <AvatarFallback>{msg.userName?.charAt(0)}</AvatarFallback>
                   </Avatar>
                 )}
                 <div
@@ -127,13 +127,13 @@ export default function ChatRoomPage() {
                 {isCurrentUser && (
                   <Avatar className="h-8 w-8">
                     <AvatarImage src={msg.userAvatar} alt={msg.userName} />
-                    <AvatarFallback>{msg.userName.charAt(0)}</AvatarFallback>
+                    <AvatarFallback>{msg.userName?.charAt(0)}</AvatarFallback>
                   </Avatar>
                 )}
               </div>
             );
           })}
-          {messages?.length === 0 && (
+          {!isLoadingMessages && messages?.length === 0 && (
             <div className="text-center text-muted-foreground pt-10">No messages yet. Be the first to say something!</div>
           )}
         </div>
@@ -182,3 +182,5 @@ const ChatSkeleton = () => (
     </footer>
   </div>
 );
+
+    
