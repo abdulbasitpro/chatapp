@@ -16,6 +16,8 @@ import {
   SidebarMenuAction,
   useSidebar,
   SidebarTrigger,
+  SidebarMenu,
+  SidebarMenuSkeleton,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -282,7 +284,3 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
 
 // Helper type for useCollection
 type WithId<T> = T & { id: string };
-
-    
-
-    
