@@ -23,3 +23,16 @@ export type Room = {
   name: string;
   creatorId: string;
 };
+
+export type Status = {
+  id: string;
+  userId: string;
+  userName: string;
+  userAvatar: string;
+  imageUrl?: string;
+  text?: string;
+  createdAt: any;
+  expiresAt: any;
+};
+
+    

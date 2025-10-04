@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "User": {
@@ -89,6 +90,44 @@
         "userName",
         "userAvatar"
       ]
+    },
+    "Status": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Status",
+      "type": "object",
+      "description": "Represents a user's status update.",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The ID of the user who created the status."
+        },
+        "userName": {
+          "type": "string",
+          "description": "The name of the user who created the status."
+        },
+        "userAvatar": {
+          "type": "string",
+          "description": "The avatar URL of the user who created the status."
+        },
+        "imageUrl": {
+          "type": "string",
+          "description": "The URL of the image in the status.",
+          "format": "uri"
+        },
+        "text": {
+          "type": "string",
+          "description": "The text content of the status."
+        },
+        "createdAt": {
+          "type": "object",
+          "description": "The server timestamp of when the status was created."
+        },
+        "expiresAt": {
+          "type": "object",
+          "description": "The server timestamp of when the status will expire."
+        }
+      },
+      "required": ["userId", "userName", "userAvatar", "createdAt", "expiresAt"]
     }
   },
   "auth": {
@@ -114,6 +153,14 @@
         "$ref": "#/entities/Message"
       },
       "description": "Stores messages for a specific chat room."
+    },
+    "/status/{statusId}": {
+      "schema": {
+        "$ref": "#/entities/Status"
+      },
+      "description": "Stores user status updates."
     }
   }
 }
+
+    

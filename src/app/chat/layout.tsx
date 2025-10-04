@@ -1,8 +1,9 @@
+
 "use client";
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, MessageSquare, Plus, Users, Menu, Loader2, Trash2 } from "lucide-react";
+import { LogOut, MessageSquare, Plus, Users, Menu, Loader2, Trash2, CircleDot } from "lucide-react";
 import * as React from "react";
 
 import {
@@ -95,7 +96,6 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
       const roomRef = doc(firestore, 'rooms', deleteRoom.id);
       const messagesRef = collection(roomRef, 'messages');
       
-      // Delete all messages in the subcollection
       const messagesSnapshot = await getDocs(messagesRef);
       const batch = writeBatch(firestore);
       messagesSnapshot.forEach(doc => {
@@ -103,12 +103,11 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
       });
       await batch.commit();
 
-      // Delete the room itself
       deleteDocumentNonBlocking(roomRef);
 
       toast({ title: "Room deleted", description: `Room "${deleteRoom.name}" and all its messages have been deleted.` });
 
-      if (pathname === `/chat/rooms/${deleteRoom.id}`) {
+      if (pathname.includes(deleteRoom.id)) {
         router.push('/chat');
       }
 
@@ -135,6 +134,8 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
       </div>
     );
   }
+  
+  const isChatPage = pathname.startsWith('/chat/rooms') || pathname === '/chat';
 
   return (
     <SidebarProvider>
@@ -150,45 +151,67 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
             </SidebarHeader>
             <SidebarContent>
               <SidebarGroup>
-                <Button variant="outline" className="w-full justify-start" onClick={() => setCreateRoomOpen(true)}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Room
-                </Button>
+                <div className="flex flex-col gap-1 p-2">
+                   <Link href="/chat" passHref>
+                      <SidebarMenuButton variant="ghost" isActive={isChatPage} className="w-full justify-start text-sm">
+                          <MessageSquare />
+                          <span>Chat</span>
+                      </SidebarMenuButton>
+                   </Link>
+                   <Link href="/status" passHref>
+                     <SidebarMenuButton variant="ghost" isActive={pathname.startsWith('/status')} className="w-full justify-start text-sm">
+                         <CircleDot />
+                         <span>Status</span>
+                     </SidebarMenuButton>
+                   </Link>
+                </div>
               </SidebarGroup>
-              <Separator className="my-2" />
-              <SidebarMenu>
-                {isLoadingRooms ? (
-                  <>
-                    <SidebarMenuSkeleton showIcon />
-                    <SidebarMenuSkeleton showIcon />
-                    <SidebarMenuSkeleton showIcon />
-                  </>
-                ) : (
-                  rooms?.map((room) => (
-                    <SidebarMenuItem key={room.id}>
-                      <Link href={`/chat/rooms/${room.id}`} passHref className="flex-1">
-                        <SidebarMenuButton
-                          isActive={pathname === `/chat/rooms/${room.id}`}
-                          tooltip={{ children: room.name, side: 'right' }}
-                          className="justify-start"
-                        >
-                          <Users />
-                          <span>{room.name}</span>
-                        </SidebarMenuButton>
-                      </Link>
-                      {user?.uid === room.creatorId && (
-                         <SidebarMenuAction
-                           onClick={() => setDeleteRoom(room)}
-                           aria-label="Delete room"
-                           showOnHover
-                         >
-                           <Trash2 />
-                         </SidebarMenuAction>
-                      )}
-                    </SidebarMenuItem>
-                  ))
-                )}
-              </SidebarMenu>
+              
+              {isChatPage && (
+                <>
+                  <Separator className="my-2" />
+                  <SidebarGroup>
+                    <Button variant="outline" className="w-full justify-start" onClick={() => setCreateRoomOpen(true)}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Create Room
+                    </Button>
+                  </SidebarGroup>
+                  <Separator className="my-2" />
+                  <SidebarMenu>
+                    {isLoadingRooms ? (
+                      <>
+                        <SidebarMenuSkeleton showIcon />
+                        <SidebarMenuSkeleton showIcon />
+                        <SidebarMenuSkeleton showIcon />
+                      </>
+                    ) : (
+                      rooms?.map((room) => (
+                        <SidebarMenuItem key={room.id}>
+                          <Link href={`/chat/rooms/${room.id}`} passHref className="flex-1">
+                            <SidebarMenuButton
+                              isActive={pathname === `/chat/rooms/${room.id}`}
+                              tooltip={{ children: room.name, side: 'right' }}
+                              className="justify-start"
+                            >
+                              <Users />
+                              <span>{room.name}</span>
+                            </SidebarMenuButton>
+                          </Link>
+                          {user?.uid === room.creatorId && (
+                             <SidebarMenuAction
+                               onClick={() => setDeleteRoom(room)}
+                               aria-label="Delete room"
+                               showOnHover
+                             >
+                               <Trash2 />
+                             </SidebarMenuAction>
+                          )}
+                        </SidebarMenuItem>
+                      ))
+                    )}
+                  </SidebarMenu>
+                </>
+              )}
             </SidebarContent>
             <SidebarFooter>
               <Separator className="my-2" />
