@@ -12,7 +12,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth, useFirestore, setDocumentNonBlocking } from '@/firebase';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { doc } from 'firebase/firestore';
 
 const signupSchema = z.object({
@@ -40,6 +40,8 @@ export default function SignupPage() {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
       const user = userCredential.user;
+      
+      await updateProfile(user, { displayName: values.name });
 
       const userDocRef = doc(firestore, "users", user.uid);
       
@@ -68,19 +70,19 @@ export default function SignupPage() {
   };
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-4 bg-background">
+    <main className="flex min-h-screen flex-col items-center justify-center p-4 bg-muted/30">
       <div className="w-full max-w-md">
-        <Card className="shadow-lg">
+        <div className="flex justify-center items-center mb-6">
+            <MessageSquare className="h-14 w-14 text-primary" />
+        </div>
+        <Card className="shadow-2xl shadow-primary/10">
           <CardHeader className="text-center">
-            <div className="flex justify-center items-center mb-4">
-              <MessageSquare className="h-12 w-12 text-primary" />
-            </div>
-            <CardTitle className="font-headline text-3xl">Create an Account</CardTitle>
+            <CardTitle className="font-headline text-3xl font-bold">Create an Account</CardTitle>
             <CardDescription>Join Chatify and connect with others.</CardDescription>
           </CardHeader>
           <CardContent>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(handleSignup)} className="space-y-6">
+              <form onSubmit={form.handleSubmit(handleSignup)} className="space-y-4">
                 <FormField
                   control={form.control}
                   name="name"
@@ -120,15 +122,15 @@ export default function SignupPage() {
                     </FormItem>
                   )}
                 />
-                <Button type="submit" className="w-full" variant="default" disabled={form.formState.isSubmitting}>
+                <Button type="submit" className="w-full !mt-6" variant="default" disabled={form.formState.isSubmitting}>
                   {form.formState.isSubmitting ? "Signing up..." : "Sign Up"}
-                  <ArrowRight className="ml-2 h-4 w-4" />
+                   {!form.formState.isSubmitting && <ArrowRight className="ml-2 h-4 w-4" />}
                 </Button>
               </form>
             </Form>
             <div className="mt-6 text-center text-sm">
               Already have an account?{' '}
-              <Link href="/" className="underline text-primary font-medium">
+              <Link href="/" className="font-semibold text-primary hover:underline">
                 Login
               </Link>
             </div>

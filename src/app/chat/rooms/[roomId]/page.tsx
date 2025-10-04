@@ -1,16 +1,16 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Send, Smile, Paperclip, Loader2, Trash2 } from 'lucide-react';
+import { Send, Smile, Paperclip, Loader2, Trash2, X } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useCollection, useDoc, useFirestore, useUser, useMemoFirebase, addDocumentNonBlocking, deleteDocumentNonBlocking, useStorage, setDocumentNonBlocking } from '@/firebase';
-import { collection, doc, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { useCollection, useDoc, useFirestore, useUser, useMemoFirebase, addDocumentNonBlocking, deleteDocumentNonBlocking, useStorage } from '@/firebase';
+import { collection, doc, query, orderBy, serverTimestamp, setDoc, deleteDoc, Timestamp } from 'firebase/firestore';
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
@@ -32,6 +32,12 @@ type Message = {
   fileType?: string;
 };
 
+type TypingStatus = {
+  id: string;
+  userName: string;
+  timestamp: Timestamp;
+}
+
 export default function ChatRoomPage() {
   const params = useParams();
   const router = useRouter();
@@ -51,6 +57,7 @@ export default function ChatRoomPage() {
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
 
   const roomRef = useMemoFirebase(() => {
@@ -65,6 +72,16 @@ export default function ChatRoomPage() {
   }, [roomRef]);
   const { data: messages, isLoading: isLoadingMessages } = useCollection<Message>(messagesQuery);
   
+  const typingStatusesQuery = useMemoFirebase(() => {
+    if (!roomRef) return null;
+    return collection(roomRef, 'typing_statuses');
+  }, [roomRef]);
+  const { data: typingStatuses } = useCollection<TypingStatus>(typingStatusesQuery);
+
+  const typingUsers = useMemo(() => {
+    return typingStatuses?.filter(status => status.id !== user?.uid).map(status => status.userName) || [];
+  }, [typingStatuses, user?.uid]);
+
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -78,21 +95,54 @@ export default function ChatRoomPage() {
   }, [messages, isLoadingMessages]);
 
   useEffect(() => {
-    if (!isLoadingRoom && !room && roomError) {
-      // If there's an error (like permission denied), it doesn't mean the room doesn't exist.
-      // Only redirect if we have fully loaded and confirmed the room is null without an error.
+    if (roomError) {
+      toast({
+        variant: "destructive",
+        title: "Error loading room",
+        description: "You may not have permission to view this room.",
+      });
       router.replace('/chat');
     }
-  }, [isLoadingRoom, room, roomError, router]);
+  }, [roomError, router, toast]);
+
+  const updateTypingStatus = async (isTyping: boolean) => {
+    if (!user || !typingStatusesQuery) return;
+    const typingDocRef = doc(typingStatusesQuery, user.uid);
+    if (isTyping) {
+      await setDoc(typingDocRef, {
+        userName: user.displayName,
+        timestamp: serverTimestamp(),
+      });
+    } else {
+      await deleteDoc(typingDocRef);
+    }
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setNewMessage(e.target.value);
+    
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    } else {
+      updateTypingStatus(true);
+    }
+    
+    typingTimeoutRef.current = setTimeout(() => {
+      updateTypingStatus(false);
+      typingTimeoutRef.current = null;
+    }, 2000);
   };
 
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if ((newMessage.trim() === '' && !uploadingFile) || !user || !roomRef) return;
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+      await updateTypingStatus(false);
+    }
 
     if (uploadingFile) {
       handleFileUpload(uploadingFile);
@@ -156,7 +206,15 @@ export default function ChatRoomPage() {
     const file = e.target.files?.[0];
     if (file) {
       setUploadingFile(file);
-      setNewMessage(file.name); // Show file name in input
+      setNewMessage(file.name); 
+    }
+  };
+  
+  const cancelUpload = () => {
+    setUploadingFile(null);
+    setNewMessage('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -193,13 +251,13 @@ export default function ChatRoomPage() {
   }
 
   if (!room) {
-    return <div className="flex h-full items-center justify-center text-destructive">Error loading room. It may not exist or you may not have permission to view it.</div>;
+    return null;
   }
 
   return (
-    <div className="flex h-full max-h-full flex-col">
+    <div className="flex h-full max-h-full flex-col bg-muted/30">
       <header className="border-b p-4 flex items-center bg-background/95 backdrop-blur-sm z-10">
-        <h2 className="font-headline text-xl font-semibold">{room.name}</h2>
+        <h2 className="font-bold text-xl">{room.name}</h2>
       </header>
       <ScrollArea className="flex-1" ref={scrollAreaRef}>
         <div className="p-4 md:p-6 space-y-6">
@@ -211,8 +269,8 @@ export default function ChatRoomPage() {
               <div
                 key={msg.id}
                 className={cn(
-                  "group flex items-end gap-3 animate-in fade-in",
-                  isCurrentUser ? "justify-end" : "justify-start"
+                  "group flex items-end gap-2 animate-in fade-in max-w-lg",
+                  isCurrentUser ? "justify-end ml-auto" : "justify-start"
                 )}
               >
                 {!isCurrentUser && (
@@ -221,35 +279,30 @@ export default function ChatRoomPage() {
                     <AvatarFallback>{msg.userName?.charAt(0)}</AvatarFallback>
                   </Avatar>
                 )}
-                {isCurrentUser && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={() => setMessageToDelete(msg)}
-                    aria-label="Delete message"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                )}
                 <div
                   className={cn(
-                    "max-w-xs md:max-w-md lg:max-w-lg rounded-lg px-4 py-2.5 shadow-sm",
+                    "rounded-lg px-3 py-2 shadow-sm relative",
                     isCurrentUser
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-card border"
+                      ? "bg-primary text-primary-foreground rounded-br-none"
+                      : "bg-background rounded-bl-none"
                   )}
                 >
                   {!isCurrentUser && <p className="text-xs font-bold mb-1 text-primary">{msg.userName}</p>}
                   <MessageContent message={msg} />
-                  <p className="text-xs mt-1.5 opacity-70 text-right">{formatTimestamp(msg.timestamp)}</p>
+                  <p className={cn("text-xs mt-1.5 opacity-70 text-right", isCurrentUser ? "text-primary-foreground/80" : "text-muted-foreground")}>{formatTimestamp(msg.timestamp)}</p>
+                   {isCurrentUser && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity absolute -left-8 top-1/2 -translate-y-1/2"
+                      onClick={() => setMessageToDelete(msg)}
+                      aria-label="Delete message"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
-                {isCurrentUser && (
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage src={msg.userAvatar} alt={msg.userName} />
-                    <AvatarFallback>{msg.userName?.charAt(0)}</AvatarFallback>
-                  </Avatar>
-                )}
+
               </div>
             );
           })}
@@ -258,12 +311,15 @@ export default function ChatRoomPage() {
           )}
         </div>
       </ScrollArea>
-       <footer className="border-t p-2 md:p-4 bg-background/95 backdrop-blur-sm">
-        <div className="h-6 px-2 text-xs text-muted-foreground">
-        </div>
-        {uploadingFile && uploadProgress > 0 && uploadProgress < 100 && (
+       <footer className="border-t p-2 md:p-4 bg-background">
+        {typingUsers.length > 0 && (
+          <div className="h-6 px-2 text-xs text-muted-foreground italic">
+            {typingUsers.join(', ')} {typingUsers.length === 1 ? 'is' : 'are'} typing...
+          </div>
+        )}
+         {(uploadingFile && uploadProgress > 0) && (
           <div className="px-2 pb-2">
-            <Progress value={uploadProgress} className="w-full h-2" />
+            <Progress value={uploadProgress} className="w-full h-1" />
             <p className="text-xs text-center text-muted-foreground mt-1">Uploading {uploadingFile.name}... ({Math.round(uploadProgress)}%)</p>
           </div>
         )}
@@ -273,18 +329,24 @@ export default function ChatRoomPage() {
             onChange={handleInputChange}
             placeholder={uploadingFile ? uploadingFile.name : "Type a message..."}
             autoComplete="off"
-            className="pr-28 bg-background"
+            className="pr-28 bg-muted/50 focus-visible:ring-primary/50"
             disabled={!user || (uploadingFile && uploadProgress > 0 && uploadProgress < 100)}
+            readOnly={!!uploadingFile}
           />
            <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" />
-          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center">
+          <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center">
+             {uploadingFile && (
+                <Button type="button" size="icon" variant="ghost" onClick={cancelUpload}>
+                  <X className="h-5 w-5 text-muted-foreground" />
+                </Button>
+            )}
             <Popover open={isEmojiPickerOpen} onOpenChange={setEmojiPickerOpen}>
               <PopoverTrigger asChild>
                 <Button type="button" size="icon" variant="ghost" disabled={!!uploadingFile}>
-                  <Smile className="h-5 w-5" />
+                  <Smile className="h-5 w-5 text-muted-foreground" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0 border-0">
+              <PopoverContent className="w-auto p-0 border-0 mb-2">
                 <EmojiPicker
                   onEmojiClick={handleEmojiClick}
                   theme={resolvedTheme === 'dark' ? 'dark' : 'light'}
@@ -292,10 +354,10 @@ export default function ChatRoomPage() {
               </PopoverContent>
             </Popover>
             <Button type="button" size="icon" variant="ghost" onClick={() => fileInputRef.current?.click()} disabled={!!uploadingFile}>
-              <Paperclip className="h-5 w-5" />
+              <Paperclip className="h-5 w-5 text-muted-foreground" />
             </Button>
-            <Button type="submit" size="icon" variant="ghost" disabled={(!newMessage.trim() && !uploadingFile) || !user || (uploadingFile && uploadProgress > 0 && uploadProgress < 100)}>
-              <Send className="h-5 w-5 text-primary" />
+            <Button type="submit" size="icon" variant="default" disabled={(!newMessage.trim() && !uploadingFile) || !user || (uploadingFile && uploadProgress > 0 && uploadProgress < 100)}>
+              <Send className="h-5 w-5" />
               <span className="sr-only">Send</span>
             </Button>
           </div>
@@ -326,7 +388,7 @@ const ChatSkeleton = () => (
     <header className="border-b p-4 flex items-center">
       <Skeleton className="h-6 w-32" />
     </header>
-    <div className="flex-1 p-4 md:p-6 space-y-6 flex items-center justify-center">
+    <div className="flex-1 p-4 md:p-6 flex items-center justify-center">
       <Loader2 className="h-8 w-8 animate-spin text-primary" />
     </div>
     <footer className="border-t p-2 md:p-4">

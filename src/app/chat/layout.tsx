@@ -135,30 +135,27 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
     );
   }
   
-  const isChatPage = pathname.startsWith('/chat');
-
   return (
     <SidebarProvider>
       <div className="bg-background flex flex-col h-screen">
         <div className="flex flex-1 overflow-hidden">
           <Sidebar>
             <SidebarHeader>
-              <div className="flex items-center gap-2">
-                <MessageSquare className="w-7 h-7 text-primary" />
-                <h1 className="font-headline text-2xl font-semibold">Chatify</h1>
+              <div className="flex items-center gap-3">
+                <MessageSquare className="w-8 h-8 text-primary" />
+                <h1 className="font-headline text-2xl font-bold">Chatify</h1>
                 <SidebarTrigger className="ml-auto" />
               </div>
             </SidebarHeader>
             <SidebarContent>
                 <>
-                  <Separator className="my-2" />
-                  <SidebarGroup>
-                    <Button variant="outline" className="w-full justify-start" onClick={() => setCreateRoomOpen(true)}>
+                  <div className="p-2">
+                    <Button variant="default" className="w-full" onClick={() => setCreateRoomOpen(true)}>
                       <Plus className="mr-2 h-4 w-4" />
-                      Create Room
+                      New Chat Room
                     </Button>
-                  </SidebarGroup>
-                  <Separator className="my-2" />
+                  </div>
+                  <Separator className="my-1" />
                   <SidebarMenu>
                     {isLoadingRooms ? (
                       <>
@@ -175,7 +172,7 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
                               tooltip={{ children: room.name, side: 'right' }}
                               className="justify-start"
                             >
-                              <Users />
+                              <Users className="text-muted-foreground" />
                               <span>{room.name}</span>
                             </SidebarMenuButton>
                           </Link>
@@ -205,7 +202,6 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
                     </Avatar>
                     <div className="flex flex-col">
                       <span className="font-medium truncate text-sm">{user.displayName || user.email}</span>
-                      <span className="text-xs text-muted-foreground">Free Plan</span>
                     </div>
                   </div>
                   <Tooltip>
@@ -276,6 +272,3 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
 
 // Helper type for useCollection
 type WithId<T> = T & { id: string };
-
-    
-    

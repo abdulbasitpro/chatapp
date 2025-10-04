@@ -75,19 +75,19 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-4 bg-background">
+    <main className="flex min-h-screen flex-col items-center justify-center p-4 bg-muted/30">
       <div className="w-full max-w-md">
-        <Card className="shadow-lg">
+        <div className="flex justify-center items-center mb-6">
+            <MessageSquare className="h-14 w-14 text-primary" />
+        </div>
+        <Card className="shadow-2xl shadow-primary/10">
           <CardHeader className="text-center">
-            <div className="flex justify-center items-center mb-4">
-              <MessageSquare className="h-12 w-12 text-primary" />
-            </div>
-            <CardTitle className="font-headline text-3xl">Welcome to Chatify</CardTitle>
+            <CardTitle className="font-headline text-3xl font-bold">Welcome to Chatify</CardTitle>
             <CardDescription>Enter your credentials to start chatting.</CardDescription>
           </CardHeader>
           <CardContent>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(handleLogin)} className="space-y-6">
+              <form onSubmit={form.handleSubmit(handleLogin)} className="space-y-4">
                 <FormField
                   control={form.control}
                   name="email"
@@ -114,15 +114,15 @@ export default function LoginPage() {
                     </FormItem>
                   )}
                 />
-                <Button type="submit" className="w-full" variant="default" disabled={form.formState.isSubmitting}>
+                <Button type="submit" className="w-full !mt-6" variant="default" disabled={form.formState.isSubmitting}>
                   {form.formState.isSubmitting ? "Logging in..." : "Login"}
-                  <ArrowRight className="ml-2 h-4 w-4" />
+                  {!form.formState.isSubmitting && <ArrowRight className="ml-2 h-4 w-4" />}
                 </Button>
               </form>
             </Form>
             <div className="mt-6 text-center text-sm">
               Don't have an account?{' '}
-              <Link href="/signup" className="underline text-primary font-medium">
+              <Link href="/signup" className="font-semibold text-primary hover:underline">
                 Sign up
               </Link>
             </div>
