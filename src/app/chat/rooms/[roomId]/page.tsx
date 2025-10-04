@@ -2,15 +2,17 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Send, Smile, Paperclip, Loader2 } from 'lucide-react';
+import { Send, Smile, Paperclip, Loader2, Trash2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useCollection, useDoc, useFirestore, useUser, useMemoFirebase, addDocumentNonBlocking } from '@/firebase';
+import { useCollection, useDoc, useFirestore, useUser, useMemoFirebase, addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
 import { collection, doc, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { useToast } from '@/hooks/use-toast';
 
 type Message = {
   id: string;
@@ -27,8 +29,11 @@ export default function ChatRoomPage() {
   const roomId = params.roomId as string;
   const { user } = useUser();
   const firestore = useFirestore();
+  const { toast } = useToast();
 
   const [newMessage, setNewMessage] = useState('');
+  const [messageToDelete, setMessageToDelete] = useState<Message | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   const roomRef = useMemoFirebase(() => {
@@ -56,7 +61,6 @@ export default function ChatRoomPage() {
 
   useEffect(() => {
     if (!isLoadingRoom && !room) {
-      // If room doesn't exist (e.g., it was deleted), redirect.
       router.replace('/chat');
     }
   }, [isLoadingRoom, room, router]);
@@ -75,6 +79,24 @@ export default function ChatRoomPage() {
     });
 
     setNewMessage('');
+  };
+
+  const handleDeleteMessage = async () => {
+    if (!firestore || !messageToDelete || !roomRef || isDeleting) return;
+    
+    setIsDeleting(true);
+
+    try {
+      const messageRef = doc(roomRef, 'messages', messageToDelete.id);
+      deleteDocumentNonBlocking(messageRef);
+      toast({ title: "Message deleted" });
+    } catch (error) {
+      console.error("Error deleting message:", error);
+      toast({ variant: "destructive", title: "Error", description: "Failed to delete message." });
+    } finally {
+      setIsDeleting(false);
+      setMessageToDelete(null);
+    }
   };
 
   const formatTimestamp = (timestamp: any) => {
@@ -102,7 +124,7 @@ export default function ChatRoomPage() {
               <div
                 key={msg.id}
                 className={cn(
-                  "flex items-end gap-3 animate-in fade-in",
+                  "group flex items-end gap-3 animate-in fade-in",
                   isCurrentUser ? "justify-end" : "justify-start"
                 )}
               >
@@ -111,6 +133,17 @@ export default function ChatRoomPage() {
                     <AvatarImage src={msg.userAvatar} alt={msg.userName} />
                     <AvatarFallback>{msg.userName?.charAt(0)}</AvatarFallback>
                   </Avatar>
+                )}
+                {isCurrentUser && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={() => setMessageToDelete(msg)}
+                    aria-label="Delete message"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 )}
                 <div
                   className={cn(
@@ -162,6 +195,22 @@ export default function ChatRoomPage() {
           </div>
         </form>
       </footer>
+      <AlertDialog open={!!messageToDelete} onOpenChange={(open) => !open && setMessageToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this message. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setMessageToDelete(null)} disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteMessage} disabled={isDeleting} className="bg-destructive hover:bg-destructive/90">
+              {isDeleting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -182,5 +231,3 @@ const ChatSkeleton = () => (
     </footer>
   </div>
 );
-
-    
