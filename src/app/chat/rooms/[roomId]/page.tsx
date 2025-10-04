@@ -304,8 +304,8 @@ export default function ChatRoomPage() {
       </footer>
       <AlertDialog open={!!messageToDelete} onOpenChange={(open) => !open && setMessageToDelete(null)}>
         <AlertDialogContent>
-           <AlertDialogTitleComponent>Are you absolutely sure?</AlertDialogTitleComponent>
           <AlertDialogHeader>
+            <AlertDialogTitleComponent>Are you absolutely sure?</AlertDialogTitleComponent>
             <AlertDialogDescription>
               This will permanently delete this message. This action cannot be undone.
             </AlertDialogDescription>
@@ -335,5 +335,7 @@ const ChatSkeleton = () => (
     </footer>
   </div>
 );
+
+    
 
     

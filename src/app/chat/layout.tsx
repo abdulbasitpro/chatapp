@@ -12,12 +12,7 @@ import {
   SidebarHeader,
   SidebarContent,
   SidebarFooter,
-  SidebarMenu,
   SidebarMenuItem,
-  SidebarMenuButton,
-  SidebarTrigger,
-  SidebarGroup,
-  SidebarMenuSkeleton,
   SidebarMenuAction,
   useSidebar,
 } from "@/components/ui/sidebar";
@@ -87,31 +82,27 @@ function ChatSidebar() {
   const handleDeleteRoom = async () => {
     if (!firestore || !deleteRoom) return;
     setIsDeleting(true);
-    try {
-      const roomRef = doc(firestore, 'rooms', deleteRoom.id);
-      const messagesRef = collection(roomRef, 'messages');
-      
-      const messagesSnapshot = await getDocs(messagesRef);
-      const batch = writeBatch(firestore);
-      messagesSnapshot.forEach(doc => {
-        batch.delete(doc.ref);
-      });
-      batch.delete(roomRef);
+    
+    const roomRef = doc(firestore, 'rooms', deleteRoom.id);
+    const messagesRef = collection(roomRef, 'messages');
+    
+    const messagesSnapshot = await getDocs(messagesRef);
+    const batch = writeBatch(firestore);
+    messagesSnapshot.forEach(doc => {
+      batch.delete(doc.ref);
+    });
+    batch.delete(roomRef);
 
-      await batch.commit();
+    await batch.commit();
 
-      toast({ title: "Room deleted", description: `Room "${deleteRoom.name}" and all its messages have been deleted.` });
+    toast({ title: "Room deleted", description: `Room "${deleteRoom.name}" and all its messages have been deleted.` });
 
-      if (pathname.includes(deleteRoom.id)) {
-        router.push('/chat');
-      }
-    } catch (error) {
-      console.error("Error deleting room:", error);
-      toast({ variant: "destructive", title: "Error", description: "Could not delete room." });
-    } finally {
-      setIsDeleting(false);
-      setDeleteRoom(null);
+    if (pathname.includes(deleteRoom.id)) {
+      router.push('/chat');
     }
+    
+    setIsDeleting(false);
+    setDeleteRoom(null);
   };
 
   return (
@@ -180,8 +171,8 @@ function ChatSidebar() {
       </Dialog>
       <AlertDialog open={!!deleteRoom} onOpenChange={(open) => !open && setDeleteRoom(null)}>
         <AlertDialogContent>
-          <AlertDialogTitleComponent>Are you absolutely sure?</AlertDialogTitleComponent>
           <AlertDialogHeader>
+            <AlertDialogTitleComponent>Are you absolutely sure?</AlertDialogTitleComponent>
             <AlertDialogDescription>
               This will permanently delete the room "{deleteRoom?.name}" and all of its messages. This action cannot be undone.
             </AlertDialogDescription>
@@ -285,5 +276,7 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
 
 // Helper type for useCollection
 type WithId<T> = T & { id: string };
+
+    
 
     
